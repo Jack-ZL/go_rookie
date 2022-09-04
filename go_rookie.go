@@ -46,6 +46,22 @@ func (r *routerGroup) Post(name string, handlerFunc HandlerFunc) {
 	r.handle(name, http.MethodPost, handlerFunc)
 }
 
+func (r *routerGroup) Delete(name string, handlerFunc HandlerFunc) {
+	r.handle(name, http.MethodDelete, handlerFunc)
+}
+func (r *routerGroup) Put(name string, handlerFunc HandlerFunc) {
+	r.handle(name, http.MethodPut, handlerFunc)
+}
+func (r *routerGroup) Patch(name string, handlerFunc HandlerFunc) {
+	r.handle(name, http.MethodPatch, handlerFunc)
+}
+func (r *routerGroup) Options(name string, handlerFunc HandlerFunc) {
+	r.handle(name, http.MethodOptions, handlerFunc)
+}
+func (r *routerGroup) Head(name string, handlerFunc HandlerFunc) {
+	r.handle(name, http.MethodHead, handlerFunc)
+}
+
 type router struct {
 	routerGroup []*routerGroup
 }
@@ -79,7 +95,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, group := range e.routerGroup {
 		routerName := SubStringLast(r.RequestURI, "/"+group.name)
 		node := group.treeNode.Get(routerName)
-		if node != nil {
+		if node != nil && node.isEnd {
 			// 路由匹配
 			ctx := &Context{
 				W: w,
@@ -100,13 +116,6 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(w, "%s %s not allowed \n", r.RequestURI, method)
 			return
 		}
-
-		// for name, methodHandle := range group.handlerFuncMap {
-		// 	url := "/" + group.name + name
-		// 	if r.RequestURI == url {
-		//
-		// 	}
-		// }
 	}
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprintf(w, "%s not found \n", r.RequestURI)
