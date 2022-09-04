@@ -3,8 +3,9 @@ package go_rookie
 import "strings"
 
 type treeNode struct {
-	name     string
-	children []*treeNode
+	name       string
+	children   []*treeNode
+	routerName string
 }
 
 func (t *treeNode) Put(path string) {
@@ -38,6 +39,7 @@ func (t *treeNode) Put(path string) {
 
 func (t *treeNode) Get(path string) *treeNode {
 	strs := strings.Split(path, "/")
+	routerName := ""
 	for index, name := range strs {
 		if index == 0 {
 			continue
@@ -48,6 +50,8 @@ func (t *treeNode) Get(path string) *treeNode {
 		for _, node := range children {
 			if node.name == name || node.name == "*" || strings.Contains(node.name, ":") {
 				isMatch = true
+				routerName += "/" + node.name
+				node.routerName = routerName
 				t = node
 				if index == len(strs)-1 {
 					return node
