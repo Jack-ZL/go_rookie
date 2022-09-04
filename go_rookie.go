@@ -6,31 +6,42 @@ import (
 	"net/http"
 )
 
-type HandlerFunc func(w http.ResponseWriter, r *http.Request)
+const ANY = "ANY"
+
+type HandlerFunc func(ctx *Context)
 
 type routerGroup struct {
 	name             string
-	handlerFuncMap   map[string]HandlerFunc
+	handlerFuncMap   map[string]map[string]HandlerFunc
 	handlerMethodMap map[string][]string
 }
 
-func (r *routerGroup) Add(name string, handlerFunc HandlerFunc) {
-	r.handlerFuncMap[name] = handlerFunc
+// func (r *routerGroup) Add(name string, handlerFunc HandlerFunc) {
+// 	r.handlerFuncMap[name] = handlerFunc
+// }
+
+func (r *routerGroup) handle(name string, method string, handlerFunc HandlerFunc) {
+	_, ok := r.handlerFuncMap[name]
+	if !ok {
+		r.handlerFuncMap[name] = make(map[string]HandlerFunc)
+	}
+	_, ok = r.handlerFuncMap[name][method]
+	if ok {
+		panic("有重复的路由")
+	}
+	r.handlerFuncMap[name][method] = handlerFunc
 }
 
 func (r *routerGroup) Any(name string, handlerFunc HandlerFunc) {
-	r.handlerFuncMap[name] = handlerFunc
-	r.handlerMethodMap["ANY"] = append(r.handlerMethodMap["ANY"], name)
+	r.handle(name, ANY, handlerFunc)
 }
 
 func (r *routerGroup) Get(name string, handlerFunc HandlerFunc) {
-	r.handlerFuncMap[name] = handlerFunc
-	r.handlerMethodMap[http.MethodGet] = append(r.handlerMethodMap[http.MethodGet], name)
+	r.handle(name, http.MethodGet, handlerFunc)
 }
 
 func (r *routerGroup) Post(name string, handlerFunc HandlerFunc) {
-	r.handlerFuncMap[name] = handlerFunc
-	r.handlerMethodMap[http.MethodPost] = append(r.handlerMethodMap[http.MethodPost], name)
+	r.handle(name, http.MethodPost, handlerFunc)
 }
 
 type router struct {
@@ -40,7 +51,7 @@ type router struct {
 func (r *router) Group(name string) *routerGroup {
 	rg := &routerGroup{
 		name:             name,
-		handlerFuncMap:   make(map[string]HandlerFunc),
+		handlerFuncMap:   make(map[string]map[string]HandlerFunc),
 		handlerMethodMap: make(map[string][]string),
 	}
 	r.routerGroup = append(r.routerGroup, rg)
@@ -63,24 +74,20 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for name, methodHandle := range group.handlerFuncMap {
 			url := "/" + group.name + name
 			if r.RequestURI == url {
-				routers, ok := group.handlerMethodMap["ANY"]
-				if ok {
-					for _, routerName := range routers {
-						if routerName == name {
-							methodHandle(w, r)
-							return
-						}
-					}
+				ctx := &Context{
+					W: w,
+					R: r,
 				}
-				// method进行匹配
-				routers, ok = group.handlerMethodMap[method]
+				handle, ok := methodHandle[ANY]
 				if ok {
-					for _, routerName := range routers {
-						if routerName == name {
-							methodHandle(w, r)
-							return
-						}
-					}
+					handle(ctx)
+					return
+				}
+
+				handle, ok = methodHandle[method]
+				if ok {
+					handle(ctx)
+					return
 				}
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				fmt.Fprintf(w, "%s %s not allowed \n", r.RequestURI, method)
