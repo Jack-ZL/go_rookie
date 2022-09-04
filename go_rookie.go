@@ -96,7 +96,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
-	fmt.Fprintf(w, "%s %s not found \n", r.RequestURI)
+	fmt.Fprintf(w, "%s not found \n", r.RequestURI)
 }
 
 func (e *Engine) Run() {
