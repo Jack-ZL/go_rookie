@@ -60,7 +60,6 @@ func (t *treeNode) Get(path string) *treeNode {
 				node.routerName = routerName
 				t = node
 				if index == len(strs)-1 {
-					node.isEnd = true
 					return node
 				}
 				break
