@@ -2,6 +2,7 @@ package go_rookie
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"html/template"
 	"net/http"
 )
@@ -102,5 +103,12 @@ func (c *Context) JSON(status int, data any) error {
 		return err
 	}
 	_, err = c.W.Write(jsonData)
+	return err
+}
+
+func (c *Context) XML(status int, data any) error {
+	c.W.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	c.W.WriteHeader(status)
+	err := xml.NewEncoder(c.W).Encode(data)
 	return err
 }
