@@ -1,6 +1,7 @@
 package go_rookie
 
 import (
+	"encoding/json"
 	"html/template"
 	"net/http"
 )
@@ -69,8 +70,37 @@ func (c *Context) HTMLTemplateGlob(name string, data any, pattern string) error 
 	return err
 }
 
+/**
+ * Template
+ * @Author：Jack-Z
+ * @Description: 模板渲染-通用型
+ * @receiver c
+ * @param name
+ * @param data
+ * @return error
+ */
 func (c *Context) Template(name string, data any) error {
 	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err := c.engine.HTMLRender.Template.ExecuteTemplate(c.W, name, data)
+	return err
+}
+
+/**
+ * JSON
+ * @Author：Jack-Z
+ * @Description: json格式的数据渲染
+ * @receiver c
+ * @param status
+ * @param data
+ * @return error
+ */
+func (c *Context) JSON(status int, data any) error {
+	c.W.Header().Set("Content-Type", "application/json; charset=utf-8")
+	c.W.WriteHeader(status)
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = c.W.Write(jsonData)
 	return err
 }
