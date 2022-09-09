@@ -2,6 +2,8 @@ package go_rookie
 
 import (
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/render"
+	"html/template"
 	"log"
 	"net/http"
 )
@@ -140,6 +142,8 @@ func (r *router) Group(name string) *routerGroup {
 
 type Engine struct {
 	router
+	funcMap    template.FuncMap
+	HTMLRender render.HTMLRender
 }
 
 /**
@@ -152,6 +156,19 @@ func New() *Engine {
 	return &Engine{
 		router: router{},
 	}
+}
+
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) LoadTemplate(pattern string) {
+	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
+	e.SetHtmlTemplate(t)
+}
+
+func (e *Engine) SetHtmlTemplate(t *template.Template) {
+	e.HTMLRender = render.HTMLRender{Template: t}
 }
 
 /**
@@ -174,8 +191,9 @@ func (e *Engine) httpRequestHandler(w http.ResponseWriter, r *http.Request) {
 		if node != nil && node.isEnd {
 			// 路由匹配
 			ctx := &Context{
-				W: w,
-				R: r,
+				W:      w,
+				R:      r,
+				engine: e,
 			}
 			handle, ok := group.handlerFuncMap[node.routerName][ANY]
 			if ok {
