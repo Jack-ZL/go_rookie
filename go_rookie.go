@@ -22,26 +22,20 @@ type routerGroup struct {
 	handlerFuncMap   map[string]map[string]HandlerFunc
 	handlerMethodMap map[string][]string
 	treeNode         *treeNode
-	preMiddlewares   []MiddlewareFunc // 请求处理前的中间件
-	postMiddlewares  []MiddlewareFunc // 请求处理后的中间件
+	middlewares      []MiddlewareFunc // 请求处理前的中间件
 }
 
-func (r *routerGroup) PreMiddlewares(middlewareFunc ...MiddlewareFunc) {
-	r.preMiddlewares = append(r.preMiddlewares, middlewareFunc...)
-}
-
-func (r *routerGroup) PostMiddlewares(middlewareFunc ...MiddlewareFunc) {
-	r.postMiddlewares = append(r.postMiddlewares, middlewareFunc...)
+func (r *routerGroup) Use(middlewareFunc ...MiddlewareFunc) {
+	r.middlewares = append(r.middlewares, middlewareFunc...)
 }
 
 func (r *routerGroup) methodHandler(h HandlerFunc, ctx *Context) {
-	// 前置中间件
-	if r.preMiddlewares != nil {
-		for _, middlewareFunc := range r.preMiddlewares {
+	// 中间件
+	if r.middlewares != nil {
+		for _, middlewareFunc := range r.middlewares {
 			h = middlewareFunc(h)
 		}
 	}
-
 	h(ctx)
 }
 
