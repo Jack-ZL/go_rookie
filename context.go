@@ -3,6 +3,7 @@ package go_rookie
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -166,4 +167,21 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
 
 	c.R.URL.Path = filepath
 	http.FileServer(fs).ServeHTTP(c.W, c.R)
+}
+
+/**
+ * Redirect
+ * @Author：Jack-Z
+ * @Description: url重定向
+ * @receiver c
+ * @param status
+ * @param url
+ */
+func (c *Context) Redirect(status int, url string) {
+	// status状态码判断
+	if (status < http.StatusMultipleChoices || status > http.StatusPermanentRedirect) && status != http.StatusCreated {
+		panic(fmt.Sprintf("Cannot redirect with status code %d", status))
+	}
+
+	http.Redirect(c.W, c.R, url, status)
 }
