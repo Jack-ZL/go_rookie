@@ -24,10 +24,10 @@ type Context struct {
  * @return error
  */
 func (c *Context) HTML(status int, html string) error {
-	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
-	c.W.WriteHeader(status) // 状态值200（即使不设置默认也是200）
-	_, err := c.W.Write([]byte(html))
-	return err
+	return c.Render(status, &render.HTML{
+		Data:       html,
+		IsTemplate: false,
+	})
 }
 
 /**
@@ -82,9 +82,12 @@ func (c *Context) HTMLTemplateGlob(name string, data any, pattern string) error 
  * @return error
  */
 func (c *Context) Template(name string, data any) error {
-	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err := c.engine.HTMLRender.Template.ExecuteTemplate(c.W, name, data)
-	return err
+	return c.Render(http.StatusOK, &render.HTML{
+		Data:       data,
+		IsTemplate: true,
+		Template:   c.engine.HTMLRender.Template,
+		Name:       name,
+	})
 }
 
 /**
@@ -97,8 +100,7 @@ func (c *Context) Template(name string, data any) error {
  * @return error
  */
 func (c *Context) JSON(status int, data any) error {
-
-	return c.Render(status, c.W, &render.JSON{
+	return c.Render(status, &render.JSON{
 		Data: data,
 	})
 }
@@ -113,7 +115,7 @@ func (c *Context) JSON(status int, data any) error {
  * @return error
  */
 func (c *Context) XML(status int, data any) error {
-	return c.Render(status, c.W, &render.XML{
+	return c.Render(status, &render.XML{
 		Data: data,
 	})
 }
@@ -191,7 +193,7 @@ func (c *Context) Redirect(status int, url string) {
  * @return error
  */
 func (c *Context) String(status int, format string, values ...any) error {
-	return c.Render(status, c.W, &render.String{
+	return c.Render(status, &render.String{
 		Format: format,
 		Data:   values,
 	})
@@ -207,8 +209,8 @@ func (c *Context) String(status int, format string, values ...any) error {
  * @param r
  * @return error
  */
-func (c *Context) Render(statusCode int, w http.ResponseWriter, r render.Render) error {
-	err := r.Render(w)
+func (c *Context) Render(statusCode int, r render.Render) error {
+	err := r.Render(c.W)
 	c.W.WriteHeader(statusCode)
 	return err
 }
