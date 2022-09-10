@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -197,12 +198,14 @@ func (c *Context) Redirect(status int, url string) {
  * @return error
  */
 func (c *Context) String(status int, format string, values ...any) error {
-	c.W.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	err := c.Render(c.W, &render.String{
+		Format: format,
+		Data:   values,
+	})
 	c.W.WriteHeader(status)
-	if len(values) > 0 {
-		_, err := fmt.Fprintf(c.W, format, values...)
-		return err
-	}
-	_, err := c.W.Write(StringToBytes(format))
 	return err
+}
+
+func (c *Context) Render(w http.ResponseWriter, r render.Render) error {
+	return r.Render(w)
 }
