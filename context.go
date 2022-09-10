@@ -1,7 +1,6 @@
 package go_rookie
 
 import (
-	"fmt"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"net/http"
@@ -173,13 +172,12 @@ func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
  * @param status
  * @param url
  */
-func (c *Context) Redirect(status int, url string) {
-	// status状态码判断
-	if (status < http.StatusMultipleChoices || status > http.StatusPermanentRedirect) && status != http.StatusCreated {
-		panic(fmt.Sprintf("Cannot redirect with status code %d", status))
-	}
-
-	http.Redirect(c.W, c.R, url, status)
+func (c *Context) Redirect(status int, url string) error {
+	return c.Render(status, &render.Redirect{
+		Code:     status,
+		Request:  c.R,
+		Location: url,
+	})
 }
 
 /**
