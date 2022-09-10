@@ -1,7 +1,6 @@
 package go_rookie
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
@@ -98,14 +97,10 @@ func (c *Context) Template(name string, data any) error {
  * @return error
  */
 func (c *Context) JSON(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/json; charset=utf-8")
-	c.W.WriteHeader(status)
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	_, err = c.W.Write(jsonData)
-	return err
+
+	return c.Render(status, c.W, &render.JSON{
+		Data: data,
+	})
 }
 
 /**
