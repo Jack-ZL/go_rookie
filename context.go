@@ -86,6 +86,19 @@ func (c *Context) initQueryCache() {
 // map类型参数获取，比如：http://localhost:8080/queryMap?user[id]=1&user[name]=张三
 
 /**
+ * QueryMap
+ * @Author：Jack-Z
+ * @Description: map类型参数获取（不返回判断值）
+ * @receiver c
+ * @param key
+ * @return dicts
+ */
+func (c *Context) QueryMap(key string) map[string]string {
+	dicts, _ := c.GetQueryMap(key)
+	return dicts
+}
+
+/**
  * GetQueryMap
  * @Author：Jack-Z
  * @Description: map类型参数获取
@@ -321,6 +334,10 @@ func (c *Context) String(status int, format string, values ...any) error {
  */
 func (c *Context) Render(statusCode int, r render.Render) error {
 	err := r.Render(c.W)
-	c.W.WriteHeader(statusCode)
+	if statusCode != http.StatusOK {
+		// 如果状态码不是200，才写入状态码，
+		// 针对 `http: superfluous response.WriteHeader` 问题
+		c.W.WriteHeader(statusCode)
+	}
 	return err
 }
