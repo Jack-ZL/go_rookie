@@ -218,7 +218,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	for _, group := range e.routerGroup {
-		routerName := SubStringLast(r.RequestURI, "/"+group.name)
+		routerName := SubStringLast(r.URL.Path, "/"+group.name)
 		node := group.treeNode.Get(routerName)
 		if node != nil && node.isEnd {
 			// 路由匹配

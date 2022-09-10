@@ -8,9 +8,80 @@ import (
 )
 
 type Context struct {
-	W      http.ResponseWriter
-	R      *http.Request
-	engine *Engine
+	W          http.ResponseWriter
+	R          *http.Request
+	engine     *Engine
+	queryCache url.Values
+}
+
+// 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
+/**
+ * GetDefaultQuery
+ * @Author：Jack-Z
+ * @Description: 获取参数，没有或为空 就用默认值
+ * @receiver c
+ * @param key
+ * @param defaultValue
+ * @return string
+ */
+func (c *Context) GetDefaultQuery(key, defaultValue string) string {
+	values, ok := c.GetQueryArray(key)
+	if !ok {
+		return defaultValue
+	}
+	return values[0]
+}
+
+/**
+ * GetQuery
+ * @Author：Jack-Z
+ * @Description: 获取query参数
+ * @receiver c
+ * @param key
+ * @return string
+ */
+func (c *Context) GetQuery(key string) string {
+	c.initQueryCache()
+	return c.queryCache.Get(key)
+}
+
+/**
+ * QueryArray
+ * @Author：Jack-Z
+ * @Description: 获取query参数（数组形式的多个参数），返回值不带判断
+ * @receiver c
+ * @param key
+ * @return []string
+ */
+func (c *Context) QueryArray(key string) []string {
+	c.initQueryCache()
+	values, _ := c.queryCache[key]
+	return values
+}
+
+/**
+ * GetQueryArray
+ * @Author：Jack-Z
+ * @Description: 获取query参数（数组形式的多个参数）
+ * @receiver c
+ * @param key
+ * @return []string
+ * @return bool
+ */
+func (c *Context) GetQueryArray(key string) ([]string, bool) {
+	c.initQueryCache()
+	values, ok := c.queryCache[key]
+	return values, ok
+}
+
+func (c *Context) initQueryCache() {
+	if c.queryCache == nil {
+		if c.R != nil {
+			c.queryCache = c.R.URL.Query()
+		} else {
+			c.queryCache = url.Values{}
+		}
+	}
 }
 
 /**
