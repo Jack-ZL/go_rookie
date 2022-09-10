@@ -1,21 +1,56 @@
 package go_rookie
 
 import (
+	"errors"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+const defaultMaxMemory = 32 << 20 // 默认是分配32M的内存
 
 type Context struct {
 	W          http.ResponseWriter
 	R          *http.Request
 	engine     *Engine
 	queryCache url.Values
+	formCache  url.Values
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
+
+/**
+ * initQueryCache
+ * @Author：Jack-Z
+ * @Description: 初始化query参数
+ * @receiver c
+ */
+func (c *Context) initQueryCache() {
+	if c.R != nil {
+		c.queryCache = c.R.URL.Query()
+	} else {
+		c.queryCache = url.Values{}
+	}
+}
+
+/**
+ * GetQueryArray
+ * @Author：Jack-Z
+ * @Description: 获取query参数（数组形式的多个参数）
+ * @receiver c
+ * @param key
+ * @return []string
+ * @return bool
+ */
+func (c *Context) GetQueryArray(key string) ([]string, bool) {
+	c.initQueryCache()
+	values, ok := c.queryCache[key]
+	return values, ok
+}
+
 /**
  * GetDefaultQuery
  * @Author：Jack-Z
@@ -60,43 +95,7 @@ func (c *Context) QueryArray(key string) []string {
 	return values
 }
 
-/**
- * GetQueryArray
- * @Author：Jack-Z
- * @Description: 获取query参数（数组形式的多个参数）
- * @receiver c
- * @param key
- * @return []string
- * @return bool
- */
-func (c *Context) GetQueryArray(key string) ([]string, bool) {
-	c.initQueryCache()
-	values, ok := c.queryCache[key]
-	return values, ok
-}
-
-func (c *Context) initQueryCache() {
-	if c.R != nil {
-		c.queryCache = c.R.URL.Query()
-	} else {
-		c.queryCache = url.Values{}
-	}
-}
-
 // map类型参数获取，比如：http://localhost:8080/queryMap?user[id]=1&user[name]=张三
-
-/**
- * QueryMap
- * @Author：Jack-Z
- * @Description: map类型参数获取（不返回判断值）
- * @receiver c
- * @param key
- * @return dicts
- */
-func (c *Context) QueryMap(key string) map[string]string {
-	dicts, _ := c.GetQueryMap(key)
-	return dicts
-}
 
 /**
  * GetQueryMap
@@ -110,6 +109,19 @@ func (c *Context) QueryMap(key string) map[string]string {
 func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
 	c.initQueryCache()
 	return c.get(c.queryCache, key)
+}
+
+/**
+ * QueryMap
+ * @Author：Jack-Z
+ * @Description: map类型参数获取（不返回判断值）
+ * @receiver c
+ * @param key
+ * @return dicts
+ */
+func (c *Context) QueryMap(key string) map[string]string {
+	dicts, _ := c.GetQueryMap(key)
+	return dicts
 }
 
 /**
@@ -136,6 +148,96 @@ func (c *Context) get(cache map[string][]string, key string) (map[string]string,
 		}
 	}
 	return dicts, exist
+}
+
+/**
+ * initPostFormCache
+ * @Author：Jack-Z
+ * @Description: 初始化form表单到内存中
+ * @receiver c
+ */
+func (c *Context) initPostFormCache() {
+	if c.R != nil {
+		if err := c.R.ParseMultipartForm(defaultMaxMemory); err != nil {
+			if !errors.Is(err, http.ErrNotMultipart) {
+				log.Println(err)
+			}
+		}
+		c.formCache = c.R.PostForm
+	} else {
+		c.formCache = url.Values{}
+	}
+}
+
+/**
+ * GetPostFormArray
+ * @Author：Jack-Z
+ * @Description: 获取form表单参数（多个的array形式的）
+ * @receiver c
+ * @param key
+ * @return []string
+ * @return bool
+ */
+func (c *Context) GetPostFormArray(key string) ([]string, bool) {
+	c.initPostFormCache()
+	values, ok := c.formCache[key]
+	return values, ok
+}
+
+/**
+ * PostFormArray
+ * @Author：Jack-Z
+ * @Description: 获取form表单参数（多个的array形式的），不返回判断结果
+ * @receiver c
+ * @param key
+ * @return []string
+ */
+func (c *Context) PostFormArray(key string) []string {
+	values, _ := c.GetPostFormArray(key)
+	return values
+}
+
+/**
+ * GetPostForm
+ * @Author：Jack-Z
+ * @Description: 获取form表单参数（单个的）
+ * @receiver c
+ * @param key
+ * @return string
+ * @return bool
+ */
+func (c *Context) GetPostForm(key string) (string, bool) {
+	if values, ok := c.GetPostFormArray(key); ok {
+		return values[0], ok
+	}
+	return "", false
+}
+
+/**
+ * GetPostFormMap
+ * @Author：Jack-Z
+ * @Description: 获取form表单（map形式的）
+ * @receiver c
+ * @param key
+ * @return map[string]string
+ * @return bool
+ */
+func (c *Context) GetPostFormMap(key string) (map[string]string, bool) {
+	c.initPostFormCache()
+	return c.get(c.formCache, key)
+}
+
+/**
+ * PostFormMap
+ * @Author：Jack-Z
+ * @Description: 获取form表单（map形式的），不返回判断结果
+ * @receiver c
+ * @param key
+ * @return map[string]string
+ */
+func (c *Context) PostFormMap(key string) map[string]string {
+	dicts, _ := c.GetPostFormMap(key)
+	return dicts
 }
 
 /**
