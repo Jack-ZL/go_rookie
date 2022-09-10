@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type Context struct {
@@ -80,6 +81,48 @@ func (c *Context) initQueryCache() {
 	} else {
 		c.queryCache = url.Values{}
 	}
+}
+
+// map类型参数获取，比如：http://localhost:8080/queryMap?user[id]=1&user[name]=张三
+
+/**
+ * GetQueryMap
+ * @Author：Jack-Z
+ * @Description: map类型参数获取
+ * @receiver c
+ * @param key
+ * @return map[string]string
+ * @return bool
+ */
+func (c *Context) GetQueryMap(key string) (map[string]string, bool) {
+	c.initQueryCache()
+	return c.get(c.queryCache, key)
+}
+
+/**
+ * get
+ * @Author：Jack-Z
+ * @Description: 通过字符串函数定位左右中括号的位置，来获取键值和参数值，并赋值到map中
+ * @receiver c
+ * @param cache
+ * @param key
+ * @return map[string]string
+ * @return bool
+ */
+func (c *Context) get(cache map[string][]string, key string) (map[string]string, bool) {
+	// user[id]=1&user[name]=张三
+	dicts := make(map[string]string)
+	exist := false
+	for k, value := range cache {
+		// 左中括号 “[” 的位置，并且[不在第一位
+		if i := strings.IndexByte(k, '['); i >= 1 && k[0:i] == key {
+			if j := strings.IndexByte(k[i+1:], ']'); j >= 1 { // 右中括号 “]” 的位置
+				exist = true
+				dicts[k[i+1:][:j]] = value[0]
+			}
+		}
+	}
+	return dicts, exist
 }
 
 /**
