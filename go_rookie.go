@@ -49,10 +49,6 @@ func (r *routerGroup) methodHandler(name string, method string, h HandlerFunc, c
 	h(ctx)
 }
 
-// func (r *routerGroup) Add(name string, handlerFunc HandlerFunc) {
-// 	r.handlerFuncMap[name] = handlerFunc
-// }
-
 /**
  * handle
  * @Author：Jack-Z
@@ -162,11 +158,25 @@ func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
 	e.funcMap = funcMap
 }
 
+/**
+ * LoadTemplate
+ * @Author：Jack-Z
+ * @Description: 加载模板
+ * @receiver e
+ * @param pattern
+ */
 func (e *Engine) LoadTemplate(pattern string) {
 	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
 	e.SetHtmlTemplate(t)
 }
 
+/**
+ * SetHtmlTemplate
+ * @Author：Jack-Z
+ * @Description: 设置模板
+ * @receiver e
+ * @param t
+ */
 func (e *Engine) SetHtmlTemplate(t *template.Template) {
 	e.HTMLRender = render.HTMLRender{Template: t}
 }
@@ -183,6 +193,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.httpRequestHandler(w, r)
 }
 
+/**
+ * httpRequestHandler
+ * @Author：Jack-Z
+ * @Description: 请求处理：路由匹配、参数获取等
+ * @receiver e
+ * @param w
+ * @param r
+ */
 func (e *Engine) httpRequestHandler(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 	for _, group := range e.routerGroup {

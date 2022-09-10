@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"html/template"
 	"net/http"
+	"net/url"
 )
 
 type Context struct {
@@ -106,9 +107,63 @@ func (c *Context) JSON(status int, data any) error {
 	return err
 }
 
+/**
+ * XML
+ * @Author：Jack-Z
+ * @Description: XML数据渲染
+ * @receiver c
+ * @param status
+ * @param data
+ * @return error
+ */
 func (c *Context) XML(status int, data any) error {
 	c.W.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	c.W.WriteHeader(status)
 	err := xml.NewEncoder(c.W).Encode(data)
 	return err
+}
+
+/**
+ * File
+ * @Author：Jack-Z
+ * @Description: 文件下载
+ * @receiver c
+ * @param filename
+ */
+func (c *Context) File(filename string) {
+	http.ServeFile(c.W, c.R, filename)
+}
+
+/**
+ * FileAttachment
+ * @Author：Jack-Z
+ * @Description: 文件下载（可以自定义名称）
+ * @receiver c
+ * @param filepath
+ * @param filename
+ */
+func (c *Context) FileAttachment(filepath, filename string) {
+	if isASCII(filename) {
+		c.W.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	} else {
+		c.W.Header().Set("Content-Disposition", `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+	}
+	http.ServeFile(c.W, c.R, filepath)
+}
+
+/**
+ * FileFromFS
+ * @Author：Jack-Z
+ * @Description:从文件系统下载
+ * @receiver c
+ * @param filepath 相对文件系统的路径
+ * @param fs
+ */
+func (c *Context) FileFromFS(filepath string, fs http.FileSystem) {
+	defer func(old string) {
+		c.R.URL.Path = old
+	}(c.R.URL.Path)
+
+	c.R.URL.Path = filepath
+	http.FileServer(fs).ServeHTTP(c.W, c.R)
 }
