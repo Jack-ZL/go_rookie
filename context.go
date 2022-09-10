@@ -185,3 +185,24 @@ func (c *Context) Redirect(status int, url string) {
 
 	http.Redirect(c.W, c.R, url, status)
 }
+
+/**
+ * String
+ * @Author：Jack-Z
+ * @Description: 字符串渲染和格式化
+ * @receiver c
+ * @param status
+ * @param format
+ * @param values
+ * @return error
+ */
+func (c *Context) String(status int, format string, values ...any) error {
+	c.W.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.W.WriteHeader(status)
+	if len(values) > 0 {
+		_, err := fmt.Fprintf(c.W, format, values...)
+		return err
+	}
+	_, err := c.W.Write(StringToBytes(format))
+	return err
+}
