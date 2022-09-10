@@ -2,7 +2,6 @@ package go_rookie
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
@@ -119,10 +118,9 @@ func (c *Context) JSON(status int, data any) error {
  * @return error
  */
 func (c *Context) XML(status int, data any) error {
-	c.W.Header().Set("Content-Type", "application/xml; charset=utf-8")
-	c.W.WriteHeader(status)
-	err := xml.NewEncoder(c.W).Encode(data)
-	return err
+	return c.Render(status, c.W, &render.XML{
+		Data: data,
+	})
 }
 
 /**
@@ -198,14 +196,24 @@ func (c *Context) Redirect(status int, url string) {
  * @return error
  */
 func (c *Context) String(status int, format string, values ...any) error {
-	err := c.Render(c.W, &render.String{
+	return c.Render(status, c.W, &render.String{
 		Format: format,
 		Data:   values,
 	})
-	c.W.WriteHeader(status)
-	return err
 }
 
-func (c *Context) Render(w http.ResponseWriter, r render.Render) error {
-	return r.Render(w)
+/**
+ * Render
+ * @Author：Jack-Z
+ * @Description: 抽离的公共方法——渲染
+ * @receiver c
+ * @param statusCode
+ * @param w
+ * @param r
+ * @return error
+ */
+func (c *Context) Render(statusCode int, w http.ResponseWriter, r render.Render) error {
+	err := r.Render(w)
+	c.W.WriteHeader(statusCode)
+	return err
 }
