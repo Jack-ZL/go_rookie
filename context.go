@@ -75,12 +75,10 @@ func (c *Context) GetQueryArray(key string) ([]string, bool) {
 }
 
 func (c *Context) initQueryCache() {
-	if c.queryCache == nil {
-		if c.R != nil {
-			c.queryCache = c.R.URL.Query()
-		} else {
-			c.queryCache = url.Values{}
-		}
+	if c.R != nil {
+		c.queryCache = c.R.URL.Query()
+	} else {
+		c.queryCache = url.Values{}
 	}
 }
 
