@@ -24,6 +24,7 @@ type Context struct {
 	formCache             url.Values
 	DisallowUnknownFields bool
 	IsValidate            bool
+	StatusCode            int
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
@@ -514,6 +515,7 @@ func (c *Context) String(status int, format string, values ...any) error {
  */
 func (c *Context) Render(statusCode int, r render.Render) error {
 	err := r.Render(c.W)
+	c.StatusCode = statusCode
 	if statusCode != http.StatusOK {
 		// 如果状态码不是200，才写入状态码，
 		// 针对 `http: superfluous response.WriteHeader` 问题
