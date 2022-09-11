@@ -1,4 +1,4 @@
-package go_rookie
+package binding
 
 import (
 	"fmt"
@@ -92,6 +92,10 @@ func (d *defaultValidator) ValidateStruct(data any) error {
 			if err := d.validateStruct(of.Index(i).Interface()); err != nil {
 				sliceValidationError = append(sliceValidationError, err)
 			}
+		}
+		// 错误切片为空，说明没任何错误，直接返回nil
+		if len(sliceValidationError) == 0 {
+			return nil
 		}
 		return sliceValidationError
 	}
