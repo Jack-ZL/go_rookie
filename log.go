@@ -41,28 +41,68 @@ type LoggerFormatter = func(params *LogFormatterParams) string
 
 // 日志输出内容项预定义
 type LogFormatterParams struct {
-	Request    *http.Request
-	TimeStamp  time.Time
-	StatusCode int
-	Latency    time.Duration
-	ClientIP   net.IP
-	Method     string
-	Path       string
+	Request        *http.Request
+	TimeStamp      time.Time
+	StatusCode     int
+	Latency        time.Duration
+	ClientIP       net.IP
+	Method         string
+	Path           string
+	IsDisplayColor bool
+}
+
+func (p *LogFormatterParams) StatusCodeColor() string {
+	code := p.StatusCode
+	switch code {
+	case http.StatusOK:
+		return green
+	default:
+		return red
+	}
+}
+
+func (p *LogFormatterParams) ResetColor() string {
+	return reset
 }
 
 var defaultFormatter = func(params *LogFormatterParams) string {
+	statusCodeColor := params.StatusCodeColor()
+	resetColor := params.ResetColor() // 结束符颜色
 	// 如果时间差超过1分钟，仍然以秒显示
 	if params.Latency > time.Minute {
 		params.Latency = params.Latency.Truncate(time.Second)
 	}
 
-	return fmt.Sprintf("[msgo] %v | %3d | %13v | %15s |%-7s %#v",
+	if params.IsDisplayColor {
+		return fmt.Sprintf("%s [go_rookie] %s |%s %v %s| %s %3d %s |%s %13v %s| %15s  |%s %-7s %s %s %#v %s \n",
+			yellow,
+			resetColor,
+			blue,
+			params.TimeStamp.Format("2006/01/02 - 15:04:05"),
+			resetColor,
+			statusCodeColor,
+			params.StatusCode,
+			resetColor,
+			red,
+			params.Latency,
+			resetColor,
+			params.ClientIP,
+			magenta,
+			params.Method,
+			resetColor,
+			cyan,
+			params.Path,
+			resetColor,
+		)
+	}
+	return fmt.Sprintf("[go_rookie] %v | %3d | %13v | %15s |%-7s %#v \n",
 		params.TimeStamp.Format("2006/01/02 - 15:04:05"),
 		params.StatusCode,
 		params.Latency,
 		params.ClientIP,
 		params.Method,
-		params.Path)
+		params.Path,
+	)
 }
 
 func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
@@ -93,7 +133,8 @@ func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
 		}
 
 		param := &LogFormatterParams{
-			Request: ctx.R,
+			Request:        ctx.R,
+			IsDisplayColor: false,
 		}
 
 		param.ClientIP = clientIP
