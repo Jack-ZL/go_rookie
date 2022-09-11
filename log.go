@@ -1,16 +1,80 @@
 package go_rookie
 
 import (
-	"log"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
+// 日志文字打印时的颜色
+const (
+	greenBg   = "\033[97;42m"
+	whiteBg   = "\033[90;47m"
+	yellowBg  = "\033[90;43m"
+	redBg     = "\033[97;41m"
+	blueBg    = "\033[97;44m"
+	magentaBg = "\033[97;45m"
+	cyanBg    = "\033[97;46m"
+	green     = "\033[32m"
+	white     = "\033[37m"
+	yellow    = "\033[33m"
+	red       = "\033[31m"
+	blue      = "\033[34m"
+	magenta   = "\033[35m"
+	cyan      = "\033[36m"
+	reset     = "\033[0m"
+)
+
+// 输出
+var DefaultWriter io.Writer = os.Stdout
+
 type LoggingConfig struct {
+	Formatrer LoggerFormatter
+	out       io.Writer
+}
+
+type LoggerFormatter = func(params *LogFormatterParams) string
+
+// 日志输出内容项预定义
+type LogFormatterParams struct {
+	Request    *http.Request
+	TimeStamp  time.Time
+	StatusCode int
+	Latency    time.Duration
+	ClientIP   net.IP
+	Method     string
+	Path       string
+}
+
+var defaultFormatter = func(params *LogFormatterParams) string {
+	// 如果时间差超过1分钟，仍然以秒显示
+	if params.Latency > time.Minute {
+		params.Latency = params.Latency.Truncate(time.Second)
+	}
+
+	return fmt.Sprintf("[msgo] %v | %3d | %13v | %15s |%-7s %#v",
+		params.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		params.StatusCode,
+		params.Latency,
+		params.ClientIP,
+		params.Method,
+		params.Path)
 }
 
 func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
+	formatter := conf.Formatrer
+	if formatter == nil {
+		formatter = defaultFormatter
+	}
+
+	out := conf.out
+	if out == nil {
+		out = DefaultWriter
+	}
 	return func(ctx *Context) {
 		start := time.Now()       // 开始时间
 		path := ctx.R.URL.Path    // 请求路径
@@ -28,18 +92,27 @@ func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
 			path = path + "?" + raw
 		}
 
-		// 日志输出
-		log.Printf("[msgo] %v | %3d | %13v | %15s |%-7s %#v",
-			stop.Format("2006/01/02 - 15:04:05"),
-			statusCode,
-			latency,
-			clientIP,
-			method,
-			path,
-		)
+		param := &LogFormatterParams{
+			Request: ctx.R,
+		}
+
+		param.ClientIP = clientIP
+		param.Latency = latency
+		param.TimeStamp = stop
+		param.Path = path
+		param.Method = method
+		param.StatusCode = statusCode
+		fmt.Fprint(out, formatter(param))
 	}
 }
 
+/**
+ * Logging
+ * @Author：Jack-Z
+ * @Description: 对外暴露的调用函数
+ * @param next
+ * @return HandlerFunc
+ */
 func Logging(next HandlerFunc) HandlerFunc {
 	return LoggingWithConfig(LoggingConfig{}, next)
 }
