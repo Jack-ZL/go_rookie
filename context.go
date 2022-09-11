@@ -3,6 +3,7 @@ package go_rookie
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -23,6 +25,7 @@ type Context struct {
 	queryCache            url.Values
 	formCache             url.Values
 	DisallowUnknownFields bool
+	IsValidate            bool
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
@@ -536,9 +539,60 @@ func (c *Context) DealJson(obj any) error {
 	}
 	decoder := json.NewDecoder(body)
 	if c.DisallowUnknownFields {
+		// 参数中有的属性，但是对应的结构体没有，报错，也就是检查结构体是否有效
 		// 传参中有，而接收的结构体中没有的参数时，会报错
 		decoder.DisallowUnknownFields()
 	}
 
-	return decoder.Decode(obj)
+	if c.IsValidate {
+		err := validateParam(obj, decoder)
+		if err != nil {
+			return err
+		}
+	} else {
+		return decoder.Decode(obj)
+	}
+
+	return nil
+}
+
+/**
+ * validateParam
+ * @Author：Jack-Z
+ * @Description: json-反射-结构体校验
+ * @param data
+ * @param decoder
+ * @return error
+ */
+func validateParam(data any, decoder *json.Decoder) error {
+	// 解析map，然后根据map中的key进行比对
+	if data == nil {
+		return nil
+	}
+	valueOf := reflect.ValueOf(data)
+	if valueOf.Kind() != reflect.Pointer {
+		// 不是指针类型
+		return errors.New("not pointer type")
+	}
+
+	t := valueOf.Elem().Interface()
+	of := reflect.ValueOf(t)
+	switch of.Kind() {
+	case reflect.Struct:
+		mapData := make(map[string]interface{})
+		_ = decoder.Decode(&mapData)
+		for i := 0; i < of.NumField(); i++ {
+			field := of.Type().Field(i)
+			required := field.Tag.Get("restrict")
+			tag := field.Tag.Get("json")
+			value := mapData[tag]
+			if value == nil && required == "required" {
+				return errors.New(fmt.Sprintf("filed [%s] is required", tag))
+			}
+		}
+		marshal, _ := json.Marshal(mapData)
+		_ = json.Unmarshal(marshal, data)
+	}
+
+	return nil
 }
