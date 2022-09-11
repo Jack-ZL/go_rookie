@@ -566,3 +566,16 @@ func (c *Context) MustBindWith(obj any, bind binding.Binding) error {
 func (c *Context) ShouldBind(obj any, bind binding.Binding) error {
 	return bind.Bind(c.R, obj)
 }
+
+/**
+ * BindXML
+ * @Author：Jack-Z
+ * @Description: 通过xml绑定器实现参数校验
+ * @receiver c
+ * @param obj
+ * @return error
+ */
+func (c *Context) BindXML(obj any) error {
+	json := binding.XML
+	return c.MustBindWith(obj, json)
+}

@@ -101,3 +101,7 @@ func (d *defaultValidator) ValidateStruct(data any) error {
 	}
 	return nil
 }
+
+func validate(data any) error {
+	return Validator.ValidateStruct(data)
+}

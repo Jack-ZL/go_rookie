@@ -7,4 +7,7 @@ type Binding interface {
 	Bind(*http.Request, any) error
 }
 
-var JSON = jsonBinding{}
+var (
+	JSON = jsonBinding{}
+	XML  = xmlBinding{}
+)

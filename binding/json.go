@@ -46,9 +46,6 @@ func (j jsonBinding) Bind(r *http.Request, data any) error {
 	}
 	return validate(data)
 }
-func validate(data any) error {
-	return Validator.ValidateStruct(data)
-}
 
 /**
  * validateParam
