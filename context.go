@@ -559,7 +559,7 @@ func (c *Context) DealJson(obj any) error {
 /**
  * validateParam
  * @Author：Jack-Z
- * @Description: json-反射-结构体校验
+ * @Description: json-反射-参数校验
  * @param data
  * @param decoder
  * @return error
@@ -578,21 +578,55 @@ func validateParam(data any, decoder *json.Decoder) error {
 	t := valueOf.Elem().Interface()
 	of := reflect.ValueOf(t)
 	switch of.Kind() {
-	case reflect.Struct:
-		mapData := make(map[string]interface{})
-		_ = decoder.Decode(&mapData)
-		for i := 0; i < of.NumField(); i++ {
-			field := of.Type().Field(i)
-			required := field.Tag.Get("restrict")
-			tag := field.Tag.Get("json")
-			value := mapData[tag]
+	case reflect.Struct: // 结构体检验
+		return checkParamStruct(of, data, decoder)
+
+	case reflect.Slice, reflect.Array: // 切片（数组）校验
+		elem := of.Type().Elem()
+		if elem.Kind() == reflect.Struct {
+			return checkParamSlice(elem, data, decoder)
+		}
+
+	default:
+		_ = decoder.Decode(data)
+	}
+
+	return nil
+}
+
+func checkParamSlice(of reflect.Type, data any, decoder *json.Decoder) error {
+	mapData := make([]map[string]interface{}, 0)
+	_ = decoder.Decode(&mapData)
+	for i := 0; i < of.NumField(); i++ {
+		field := of.Field(i)
+		required := field.Tag.Get("restrict")
+		tag := field.Tag.Get("json")
+
+		for _, v := range mapData {
+			value := v[tag]
 			if value == nil && required == "required" {
 				return errors.New(fmt.Sprintf("filed [%s] is required", tag))
 			}
 		}
-		marshal, _ := json.Marshal(mapData)
-		_ = json.Unmarshal(marshal, data)
 	}
+	marshal, _ := json.Marshal(mapData)
+	_ = json.Unmarshal(marshal, data)
+	return nil
+}
 
+func checkParamStruct(of reflect.Value, data any, decoder *json.Decoder) error {
+	mapData := make(map[string]interface{})
+	_ = decoder.Decode(&mapData)
+	for i := 0; i < of.NumField(); i++ {
+		field := of.Type().Field(i)
+		required := field.Tag.Get("restrict")
+		tag := field.Tag.Get("json")
+		value := mapData[tag]
+		if value == nil && required == "required" {
+			return errors.New(fmt.Sprintf("filed [%s] is required", tag))
+		}
+	}
+	marshal, _ := json.Marshal(mapData)
+	_ = json.Unmarshal(marshal, data)
 	return nil
 }
