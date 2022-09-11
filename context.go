@@ -1,6 +1,7 @@
 package go_rookie
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
@@ -16,11 +17,12 @@ import (
 const defaultMultipartMemory = 32 << 20 // 默认是分配32M的内存
 
 type Context struct {
-	W          http.ResponseWriter
-	R          *http.Request
-	engine     *Engine
-	queryCache url.Values
-	formCache  url.Values
+	W                     http.ResponseWriter
+	R                     *http.Request
+	engine                *Engine
+	queryCache            url.Values
+	formCache             url.Values
+	DisallowUnknownFields bool
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
@@ -517,4 +519,26 @@ func (c *Context) Render(statusCode int, r render.Render) error {
 		c.W.WriteHeader(statusCode)
 	}
 	return err
+}
+
+/**
+ * DealJson
+ * @Author：Jack-Z
+ * @Description: json传参支持
+ * @receiver c
+ * @param obj
+ * @return error
+ */
+func (c *Context) DealJson(obj any) error {
+	body := c.R.Body
+	if body == nil {
+		return errors.New("invalid request")
+	}
+	decoder := json.NewDecoder(body)
+	if c.DisallowUnknownFields {
+		// 传参中有，而接收的结构体中没有的参数时，会报错
+		decoder.DisallowUnknownFields()
+	}
+
+	return decoder.Decode(obj)
 }
