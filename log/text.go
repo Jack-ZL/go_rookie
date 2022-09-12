@@ -12,54 +12,57 @@ type TextFormatter struct {
 /**
  * Format
  * @Author：Jack-Z
- * @Description: 日志输出内容文本格式化
+ * @Description: 格式化为文本
  * @receiver f
- * @param params
+ * @param param
  * @return string
  */
-func (f *TextFormatter) Format(params *LoggingFormatterParams) string {
+func (f *TextFormatter) Format(param *LoggingFormatParam) string {
 	now := time.Now()
-
-	fieldsStr := ""
-	if params.LoggerFields != nil {
-		// 额外信息的字符串化处理
+	fieldsString := ""
+	if param.LoggerFields != nil {
+		// name=xx,age=xxx
 		var sb strings.Builder
 		var count = 0
-		var lens = len(params.LoggerFields)
-		for k, v := range params.LoggerFields {
+		var lens = len(param.LoggerFields)
+		for k, v := range param.LoggerFields {
 			fmt.Fprintf(&sb, "%s=%v", k, v)
 			if count < lens-1 {
 				fmt.Fprintf(&sb, ",")
 				count++
 			}
 		}
-		fieldsStr = sb.String()
+		fieldsString = sb.String()
 	}
-
-	if params.IsDisplayColor {
-		levelColor := f.LevelColor(params.Level)
-		msgColor := f.MsgColor(params.Level)
-		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level =%s %s %s | msg =%s %#v %s %s",
+	var msgInfo = "\n msg: "
+	if param.Level == LevelError {
+		msgInfo = "\n Error Cause By: "
+	}
+	if param.IsColor {
+		levelColor := f.LevelColor(param.Level)
+		msgColor := f.MsgColor(param.Level)
+		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level= %s %s %s%s%s %v %s %s ",
 			yellow,
 			reset,
 			blue,
 			now.Format("2006/01/02 - 15:04:05"),
 			reset,
 			levelColor,
-			params.Level.Level(),
+			param.Level.Level(),
 			reset,
 			msgColor,
-			params.Msg,
+			msgInfo,
+			param.Msg,
 			reset,
-			fieldsStr,
+			fieldsString,
 		)
 	}
-	return fmt.Sprintf("[go_rookie] %v | level =%s | msg =%#v %s",
+	return fmt.Sprintf("[go_rookie] %v | level=%s%s%v %s",
 		now.Format("2006/01/02 - 15:04:05"),
-		params.Level.Level(),
-		params.Msg,
-		fieldsStr,
-	)
+		param.Level.Level(),
+		msgInfo,
+		param.Msg,
+		fieldsString)
 }
 
 /**

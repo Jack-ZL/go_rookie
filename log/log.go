@@ -2,13 +2,35 @@ package log
 
 import (
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/internal/grstrings"
 	"io"
+	"log"
 	"os"
 	"path"
+	"strings"
+	"time"
+)
+
+// 日志文字打印时的颜色
+const (
+	greenBg   = "\033[97;42m"
+	whiteBg   = "\033[90;47m"
+	yellowBg  = "\033[90;43m"
+	redBg     = "\033[97;41m"
+	blueBg    = "\033[97;44m"
+	magentaBg = "\033[97;45m"
+	cyanBg    = "\033[97;46m"
+	green     = "\033[32m"
+	white     = "\033[37m"
+	yellow    = "\033[33m"
+	red       = "\033[31m"
+	blue      = "\033[34m"
+	magenta   = "\033[35m"
+	cyan      = "\033[36m"
+	reset     = "\033[0m"
 )
 
 type LoggerLevel int // 日志级别初始化
-
 /**
  * Level
  * @Author：Jack-Z
@@ -36,51 +58,40 @@ const (
 	LevelError
 )
 
-// 日志文字打印时的颜色
-const (
-	greenBg   = "\033[97;42m"
-	whiteBg   = "\033[90;47m"
-	yellowBg  = "\033[90;43m"
-	redBg     = "\033[97;41m"
-	blueBg    = "\033[97;44m"
-	magentaBg = "\033[97;45m"
-	cyanBg    = "\033[97;46m"
-	green     = "\033[32m"
-	white     = "\033[37m"
-	yellow    = "\033[33m"
-	red       = "\033[31m"
-	blue      = "\033[34m"
-	magenta   = "\033[35m"
-	cyan      = "\033[36m"
-	reset     = "\033[0m"
-)
-
 type Fields map[string]any
 
+// Logger 日志
 type Logger struct {
 	Formatter    LoggingFormatter // 格式化
 	Level        LoggerLevel      // 级别
-	Outs         []*LoggerWriter  // 输入
+	Outs         []*LoggerWriter  // 输出
 	LoggerFields Fields           // 额外的信息
-	logPath      string
+	logPath      string           // 日志文件存放目录
+	LogFileSize  int64            // 日志文件大小
 }
 
 type LoggerWriter struct {
 	Level LoggerLevel
-	Outs  io.Writer
+	Out   io.Writer
 }
 
 // 定义一个格式化接口（抽离）
 type LoggingFormatter interface {
-	Format(params *LoggingFormatterParams) string
+	Format(param *LoggingFormatParam) string
 }
 
 // 格式化数据传参定义
-type LoggingFormatterParams struct {
-	Level          LoggerLevel // 日志级别
-	IsDisplayColor bool        // 是否显示颜色
-	LoggerFields   Fields      // 额外的信息
-	Msg            any
+type LoggingFormatParam struct {
+	Level        LoggerLevel // 日志级别
+	IsColor      bool        // 是否显示颜色
+	LoggerFields Fields      // 额外的信息
+	Msg          any
+}
+
+type LoggerFormatter struct {
+	Level        LoggerLevel
+	IsColor      bool
+	LoggerFields Fields
 }
 
 func New() *Logger {
@@ -90,7 +101,7 @@ func New() *Logger {
 /**
  * Default
  * @Author：Jack-Z
- * @Description: 默认输出
+ * @Description: 默认日志输出
  * @return *Logger
  */
 func Default() *Logger {
@@ -98,41 +109,53 @@ func Default() *Logger {
 	logger.Level = LevelDebug
 	w := &LoggerWriter{
 		Level: LevelDebug,
-		Outs:  os.Stdout,
+		Out:   os.Stdout,
 	}
 	logger.Outs = append(logger.Outs, w)
 	logger.Formatter = &TextFormatter{}
 	return logger
 }
 
+func (l *Logger) Info(msg any) {
+	l.Print(LevelInfo, msg)
+}
+
+func (l *Logger) Debug(msg any) {
+	l.Print(LevelDebug, msg)
+}
+
+func (l *Logger) Error(msg any) {
+	l.Print(LevelError, msg)
+}
+
 /**
  * Print
  * @Author：Jack-Z
- * @Description: 打印操作
+ * @Description: 输出打印操作
  * @receiver l
  * @param level
  * @param msg
  */
 func (l *Logger) Print(level LoggerLevel, msg any) {
 	if l.Level > level {
-		// 日志当前级别 大于 输入级别， 不打印日志
+		// 当前的级别大于输入级别 不打印对应的级别日志
 		return
 	}
-	params := &LoggingFormatterParams{
+	param := &LoggingFormatParam{
 		Level:        level,
 		LoggerFields: l.LoggerFields,
 		Msg:          msg,
 	}
-	logStr := l.Formatter.Format(params)
+	str := l.Formatter.Format(param)
 	for _, out := range l.Outs {
-		if out.Outs == os.Stdout {
-			params.IsDisplayColor = true
-			logStr = l.Formatter.Format(params)
-			fmt.Fprintln(out.Outs, logStr)
-
+		if out.Out == os.Stdout {
+			param.IsColor = true
+			str = l.Formatter.Format(param)
+			fmt.Fprintln(out.Out, str)
 		}
-		if level == out.Level || out.Level == -1 {
-			fmt.Fprintln(out.Outs, logStr)
+		if out.Level == -1 || level == out.Level {
+			fmt.Fprintln(out.Out, str)
+			l.CheckFileSize(out)
 		}
 	}
 }
@@ -146,7 +169,6 @@ func (l *Logger) Print(level LoggerLevel, msg any) {
  * @return *Logger
  */
 func (l *Logger) WithFields(fields Fields) *Logger {
-	l.LoggerFields = fields
 	return &Logger{
 		Formatter:    l.Formatter,
 		Outs:         l.Outs,
@@ -156,89 +178,93 @@ func (l *Logger) WithFields(fields Fields) *Logger {
 }
 
 /**
- * Info
+ * SetLogPath
  * @Author：Jack-Z
- * @Description: 普通级别-打印信息
+ * @Description: 设置日志文件存放路径
  * @receiver l
- * @param msg
+ * @param logPath
  */
-func (l *Logger) Info(msg any) {
-	l.Print(LevelInfo, msg)
+func (l *Logger) SetLogPath(logPath string) {
+	l.logPath = logPath
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: -1,
+		Out:   FileWriter(path.Join(logPath, "all.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelDebug,
+		Out:   FileWriter(path.Join(logPath, "debug.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelInfo,
+		Out:   FileWriter(path.Join(logPath, "info.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelError,
+		Out:   FileWriter(path.Join(logPath, "error.log")),
+	})
 }
 
 /**
- * Debug
+ * CheckFileSize
  * @Author：Jack-Z
- * @Description: 一般级别-调试
+ * @Description: 校验日志文件大小
  * @receiver l
- * @param msg
+ * @param w
  */
-func (l *Logger) Debug(msg any) {
-	l.Print(LevelDebug, msg)
+func (l *Logger) CheckFileSize(w *LoggerWriter) {
+	// 判断对应的文件大小
+	logFile := w.Out.(*os.File)
+	if logFile != nil {
+		stat, err := logFile.Stat()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		size := stat.Size()
+		if l.LogFileSize <= 0 {
+			l.LogFileSize = 100 << 20
+		}
+		if size >= l.LogFileSize {
+			_, name := path.Split(stat.Name())
+			fileName := name[0:strings.Index(name, ".")]
+			writer := FileWriter(path.Join(l.logPath, grstrings.JoinStrings(fileName, ".", time.Now().UnixMilli(), ".log")))
+			w.Out = writer
+		}
+	}
+
 }
 
 /**
- * Error
+ * FileWriter
  * @Author：Jack-Z
- * @Description: 错误级别-打印错误信息
- * @receiver l
- * @param msg
+ * @Description: 文件写入
+ * @param name
+ * @return io.Writer
  */
-func (l *Logger) Error(msg any) {
-	l.Print(LevelError, msg)
+func FileWriter(name string) io.Writer {
+	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	return w
 }
 
-// type LoggerFormatter struct {
-// 	Level          LoggerLevel // 日志级别
-// 	IsDisplayColor bool        // 是否显示颜色
-// 	LoggerFields   Fields      // 额外的信息
-// }
-//
-// /**
-//  * format
-//  * @Author：Jack-Z
-//  * @Description: 格式化日志输出（颜色、级别等）
-//  * @receiver f
-//  * @param msg
-//  * @return string
-//  */
 // func (f *LoggerFormatter) format(msg any) string {
-// 	// 要带颜色  error的颜色 为红色 info为绿色 debug为蓝色
 // 	now := time.Now()
-// 	if f.IsDisplayColor {
+// 	if f.IsColor {
 // 		// 要带颜色  error的颜色 为红色 info为绿色 debug为蓝色
 // 		levelColor := f.LevelColor()
 // 		msgColor := f.MsgColor()
-// 		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level =%s %s %s | msg =%s %#v %s | fields = %v",
-// 			yellow,
-// 			reset,
-// 			blue,
-// 			now.Format("2006/01/02 - 15:04:05"),
-// 			reset,
-// 			levelColor,
-// 			f.Level.Level(),
-// 			reset,
-// 			msgColor,
-// 			msg,
-// 			reset,
-// 			f.LoggerFields,
+// 		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level= %s %s %s | msg=%s %#v %s | fields=%v ",
+// 			yellow, reset, blue, now.Format("2006/01/02 - 15:04:05"), reset,
+// 			levelColor, f.Level.Level(), reset, msgColor, msg, reset, f.LoggerFields,
 // 		)
 // 	}
-// 	return fmt.Sprintf("[go_rookie] %v | level =%s | msg =%#v | fields =%v",
+// 	return fmt.Sprintf("[go_rookie] %v | level=%s | msg=%#v | fields=%#v",
 // 		now.Format("2006/01/02 - 15:04:05"),
-// 		f.Level.Level(),
-// 		msg,
-// 		f.LoggerFields,
-// 	)
+// 		f.Level.Level(), msg, f.LoggerFields)
 // }
 //
-// /**
-//  * LevelColor
-//  * @Author：Jack-Z
-//  * @Description: 不同级别的不同颜色
-//  * @receiver f
-//  * @return string
-//  */
 // func (f *LoggerFormatter) LevelColor() string {
 // 	switch f.Level {
 // 	case LevelDebug:
@@ -252,13 +278,6 @@ func (l *Logger) Error(msg any) {
 // 	}
 // }
 //
-// /**
-//  * MsgColor
-//  * @Author：Jack-Z
-//  * @Description: 日志文字的颜色：除了error级别为红色文字，其他默认
-//  * @receiver f
-//  * @return string
-//  */
 // func (f *LoggerFormatter) MsgColor() string {
 // 	switch f.Level {
 // 	case LevelError:
@@ -267,32 +286,3 @@ func (l *Logger) Error(msg any) {
 // 		return ""
 // 	}
 // }
-
-func FileWriter(name string) io.Writer {
-	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		panic(err)
-	}
-	return w
-}
-
-func (l *Logger) SetLogPath(logPath string) {
-	l.logPath = logPath
-	l.Outs = append(l.Outs, &LoggerWriter{
-		Level: -1,
-		Outs:  FileWriter(path.Join(logPath, "all.log")),
-	})
-
-	l.Outs = append(l.Outs, &LoggerWriter{
-		Level: LevelDebug,
-		Outs:  FileWriter(path.Join(logPath, "debug.log")),
-	})
-	l.Outs = append(l.Outs, &LoggerWriter{
-		Level: LevelInfo,
-		Outs:  FileWriter(path.Join(logPath, "info.log")),
-	})
-	l.Outs = append(l.Outs, &LoggerWriter{
-		Level: LevelError,
-		Outs:  FileWriter(path.Join(logPath, "error.log")),
-	})
-}
