@@ -48,15 +48,18 @@ const (
 	reset     = "\033[0m"
 )
 
+type Fields map[string]any
 type Logger struct {
-	Formatter LoggerFormatter // 格式化
-	Level     LoggerLevel     // 级别
-	Outs      []io.Writer     // 输入
+	Formatter    LoggerFormatter // 格式化
+	Level        LoggerLevel     // 级别
+	Outs         []io.Writer     // 输入
+	LoggerFields Fields          // 额外的信息
 }
 
 type LoggerFormatter struct {
 	Level          LoggerLevel // 日志级别
 	IsDisplayColor bool        // 是否显示颜色
+	LoggerFields   Fields      // 额外的信息
 }
 
 func New() *Logger {
@@ -91,6 +94,7 @@ func (l *Logger) Print(level LoggerLevel, msg any) {
 		return
 	}
 	l.Formatter.Level = level
+	l.Formatter.LoggerFields = l.LoggerFields
 	logStr := l.Formatter.format(msg)
 	for _, out := range l.Outs {
 		if out == os.Stdout {
@@ -101,13 +105,30 @@ func (l *Logger) Print(level LoggerLevel, msg any) {
 	}
 }
 
+/**
+ * WithFields
+ * @Author：Jack-Z
+ * @Description: 额外的信息赋值
+ * @receiver l
+ * @param fields
+ * @return *Logger
+ */
+func (l *Logger) WithFields(fields Fields) *Logger {
+	l.LoggerFields = fields
+	return &Logger{
+		Formatter:    l.Formatter,
+		Outs:         l.Outs,
+		Level:        l.Level,
+		LoggerFields: fields,
+	}
+}
+
 func (l *Logger) Info(msg any) {
 	l.Print(LevelInfo, msg)
 }
 
 func (l *Logger) Debug(msg any) {
 	l.Print(LevelDebug, msg)
-
 }
 
 func (l *Logger) Error(msg any) {
@@ -129,7 +150,7 @@ func (f *LoggerFormatter) format(msg any) string {
 		// 要带颜色  error的颜色 为红色 info为绿色 debug为蓝色
 		levelColor := f.LevelColor()
 		msgColor := f.MsgColor()
-		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level = %s %s %s | msg = %s %#v %s \n",
+		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level =%s %s %s | msg =%s %#v %s | fields = %v",
 			yellow,
 			reset,
 			blue,
@@ -141,12 +162,14 @@ func (f *LoggerFormatter) format(msg any) string {
 			msgColor,
 			msg,
 			reset,
+			f.LoggerFields,
 		)
 	}
-	return fmt.Sprintf("[go_rookie] %v | level=%s | msg=%#v \n",
+	return fmt.Sprintf("[go_rookie] %v | level =%s | msg =%#v | fields =%v",
 		now.Format("2006/01/02 - 15:04:05"),
 		f.Level.Level(),
 		msg,
+		f.LoggerFields,
 	)
 }
 
