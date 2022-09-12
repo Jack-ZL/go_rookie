@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 )
 
 type LoggerLevel int // 日志级别初始化
@@ -55,11 +56,18 @@ const (
 )
 
 type Fields map[string]any
+
 type Logger struct {
 	Formatter    LoggingFormatter // 格式化
 	Level        LoggerLevel      // 级别
-	Outs         []io.Writer      // 输入
+	Outs         []*LoggerWriter  // 输入
 	LoggerFields Fields           // 额外的信息
+	logPath      string
+}
+
+type LoggerWriter struct {
+	Level LoggerLevel
+	Outs  io.Writer
 }
 
 // 定义一个格式化接口（抽离）
@@ -88,7 +96,11 @@ func New() *Logger {
 func Default() *Logger {
 	logger := New()
 	logger.Level = LevelDebug
-	logger.Outs = append(logger.Outs, os.Stdout)
+	w := &LoggerWriter{
+		Level: LevelDebug,
+		Outs:  os.Stdout,
+	}
+	logger.Outs = append(logger.Outs, w)
 	logger.Formatter = &TextFormatter{}
 	return logger
 }
@@ -113,11 +125,15 @@ func (l *Logger) Print(level LoggerLevel, msg any) {
 	}
 	logStr := l.Formatter.Format(params)
 	for _, out := range l.Outs {
-		if out == os.Stdout {
+		if out.Outs == os.Stdout {
 			params.IsDisplayColor = true
 			logStr = l.Formatter.Format(params)
+			fmt.Fprintln(out.Outs, logStr)
+
 		}
-		fmt.Fprintln(out, logStr)
+		if level == out.Level || out.Level == -1 {
+			fmt.Fprintln(out.Outs, logStr)
+		}
 	}
 }
 
@@ -251,3 +267,32 @@ func (l *Logger) Error(msg any) {
 // 		return ""
 // 	}
 // }
+
+func FileWriter(name string) io.Writer {
+	w, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		panic(err)
+	}
+	return w
+}
+
+func (l *Logger) SetLogPath(logPath string) {
+	l.logPath = logPath
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: -1,
+		Outs:  FileWriter(path.Join(logPath, "all.log")),
+	})
+
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelDebug,
+		Outs:  FileWriter(path.Join(logPath, "debug.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelInfo,
+		Outs:  FileWriter(path.Join(logPath, "info.log")),
+	})
+	l.Outs = append(l.Outs, &LoggerWriter{
+		Level: LevelError,
+		Outs:  FileWriter(path.Join(logPath, "error.log")),
+	})
+}

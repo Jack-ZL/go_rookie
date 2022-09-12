@@ -20,6 +20,7 @@ func (f *JsonFormatter) Format(params *LoggingFormatterParams) string {
 	}
 
 	params.LoggerFields["msg"] = params.Msg
+	params.LoggerFields["log_level"] = params.Level.Level()
 	logStr, err := json.Marshal(params.LoggerFields)
 	if err != nil {
 		panic(err)
