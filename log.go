@@ -112,8 +112,10 @@ func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
 	}
 
 	out := conf.out
+	displayColor := false
 	if out == nil {
 		out = DefaultWriter
+		displayColor = true
 	}
 	return func(ctx *Context) {
 		start := time.Now()       // 开始时间
@@ -134,7 +136,7 @@ func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
 
 		param := &LogFormatterParams{
 			Request:        ctx.R,
-			IsDisplayColor: false,
+			IsDisplayColor: displayColor,
 		}
 
 		param.ClientIP = clientIP

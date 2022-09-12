@@ -4,15 +4,48 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 type LoggerLevel int // 日志级别初始化
+
+func (l LoggerLevel) Level() string {
+	switch l {
+	case LevelDebug:
+		return "DEBUG"
+	case LevelInfo:
+		return "INFO"
+	case LevelError:
+		return "ERROR"
+	default:
+		return ""
+	}
+}
 
 // 日志级别，从上到下级别递增
 const (
 	LevelDebug LoggerLevel = iota
 	LevelInfo
 	LevelError
+)
+
+// 日志文字打印时的颜色
+const (
+	greenBg   = "\033[97;42m"
+	whiteBg   = "\033[90;47m"
+	yellowBg  = "\033[90;43m"
+	redBg     = "\033[97;41m"
+	blueBg    = "\033[97;44m"
+	magentaBg = "\033[97;45m"
+	cyanBg    = "\033[97;46m"
+	green     = "\033[32m"
+	white     = "\033[37m"
+	yellow    = "\033[33m"
+	red       = "\033[31m"
+	blue      = "\033[34m"
+	magenta   = "\033[35m"
+	cyan      = "\033[36m"
+	reset     = "\033[0m"
 )
 
 type Logger struct {
@@ -22,6 +55,8 @@ type Logger struct {
 }
 
 type LoggerFormatter struct {
+	Level          LoggerLevel // 日志级别
+	IsDisplayColor bool        // 是否显示颜色
 }
 
 func New() *Logger {
@@ -55,8 +90,14 @@ func (l *Logger) Print(level LoggerLevel, msg any) {
 		// 日志当前级别 大于 输入级别， 不打印日志
 		return
 	}
+	l.Formatter.Level = level
+	logStr := l.Formatter.format(msg)
 	for _, out := range l.Outs {
-		fmt.Fprintln(out, msg)
+		if out == os.Stdout {
+			l.Formatter.IsDisplayColor = true
+			logStr = l.Formatter.format(msg)
+		}
+		fmt.Fprintln(out, logStr)
 	}
 }
 
@@ -71,4 +112,76 @@ func (l *Logger) Debug(msg any) {
 
 func (l *Logger) Error(msg any) {
 	l.Print(LevelError, msg)
+}
+
+/**
+ * format
+ * @Author：Jack-Z
+ * @Description: 格式化日志输出（颜色、级别等）
+ * @receiver f
+ * @param msg
+ * @return string
+ */
+func (f *LoggerFormatter) format(msg any) string {
+	// 要带颜色  error的颜色 为红色 info为绿色 debug为蓝色
+	now := time.Now()
+	if f.IsDisplayColor {
+		// 要带颜色  error的颜色 为红色 info为绿色 debug为蓝色
+		levelColor := f.LevelColor()
+		msgColor := f.MsgColor()
+		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level = %s %s %s | msg = %s %#v %s \n",
+			yellow,
+			reset,
+			blue,
+			now.Format("2006/01/02 - 15:04:05"),
+			reset,
+			levelColor,
+			f.Level.Level(),
+			reset,
+			msgColor,
+			msg,
+			reset,
+		)
+	}
+	return fmt.Sprintf("[go_rookie] %v | level=%s | msg=%#v \n",
+		now.Format("2006/01/02 - 15:04:05"),
+		f.Level.Level(),
+		msg,
+	)
+}
+
+/**
+ * LevelColor
+ * @Author：Jack-Z
+ * @Description: 不同级别的不同颜色
+ * @receiver f
+ * @return string
+ */
+func (f *LoggerFormatter) LevelColor() string {
+	switch f.Level {
+	case LevelDebug:
+		return blue
+	case LevelInfo:
+		return green
+	case LevelError:
+		return red
+	default:
+		return cyan
+	}
+}
+
+/**
+ * MsgColor
+ * @Author：Jack-Z
+ * @Description: 日志文字的颜色：除了error级别为红色文字，其他默认
+ * @receiver f
+ * @return string
+ */
+func (f *LoggerFormatter) MsgColor() string {
+	switch f.Level {
+	case LevelError:
+		return red
+	default:
+		return ""
+	}
 }
