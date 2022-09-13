@@ -3,6 +3,7 @@ package go_rookie
 import (
 	"errors"
 	"github.com/Jack-ZL/go_rookie/binding"
+	grLog "github.com/Jack-ZL/go_rookie/log"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"io"
@@ -25,6 +26,7 @@ type Context struct {
 	DisallowUnknownFields bool
 	IsValidate            bool
 	StatusCode            int
+	Logger                *grLog.Logger
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
@@ -514,13 +516,15 @@ func (c *Context) String(status int, format string, values ...any) error {
  * @return error
  */
 func (c *Context) Render(statusCode int, r render.Render) error {
+	c.W.WriteHeader(statusCode)
 	err := r.Render(c.W)
 	c.StatusCode = statusCode
-	if statusCode != http.StatusOK {
-		// 如果状态码不是200，才写入状态码，
-		// 针对 `http: superfluous response.WriteHeader` 问题
-		c.W.WriteHeader(statusCode)
-	}
+	// 多次调用WriteHeader 产生：superfluous response.WriteHeader问题
+	// if statusCode != http.StatusOK {
+	// 	// 如果状态码不是200，才写入状态码，
+	// 	// 针对 `http: superfluous response.WriteHeader` 问题
+	// 	c.W.WriteHeader(statusCode)
+	// }
 	return err
 }
 
@@ -580,4 +584,8 @@ func (c *Context) ShouldBind(obj any, bind binding.Binding) error {
 func (c *Context) BindXML(obj any) error {
 	json := binding.XML
 	return c.MustBindWith(obj, json)
+}
+
+func (c *Context) Fail(code int, msg string) {
+	c.String(code, msg)
 }

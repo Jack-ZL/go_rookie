@@ -2,6 +2,7 @@ package go_rookie
 
 import (
 	"fmt"
+	grLog "github.com/Jack-ZL/go_rookie/log"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"log"
@@ -112,6 +113,7 @@ func (r *routerGroup) Head(name string, handlerFunc HandlerFunc, middlewareFunc 
 
 type router struct {
 	routerGroup []*routerGroup
+	engine      *Engine
 }
 
 /**
@@ -133,6 +135,7 @@ func (r *router) Group(name string) *routerGroup {
 			children: make([]*treeNode, 0),
 		},
 	}
+	rg.Use(r.engine.middles...)
 	r.routerGroup = append(r.routerGroup, rg)
 	return rg
 }
@@ -142,6 +145,8 @@ type Engine struct {
 	funcMap    template.FuncMap
 	HTMLRender render.HTMLRender
 	pool       sync.Pool
+	Logger     *grLog.Logger
+	middles    []MiddlewareFunc
 }
 
 /**
@@ -157,6 +162,14 @@ func New() *Engine {
 	engine.pool.New = func() any {
 		return engine.allocateContext()
 	}
+	return engine
+}
+
+func Default() *Engine {
+	engine := New()
+	engine.Logger = grLog.Default()
+	engine.Use(Logging, Recovery)
+	engine.router.engine = engine
 	return engine
 }
 
@@ -203,6 +216,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := e.pool.Get().(*Context)
 	ctx.W = w
 	ctx.R = r
+	ctx.Logger = e.Logger
 	e.httpRequestHandler(ctx, w, r)
 	e.pool.Put(ctx)
 }
@@ -254,4 +268,8 @@ func (e *Engine) Run() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func (e *Engine) Use(middles ...MiddlewareFunc) {
+	e.middles = middles
 }
