@@ -1,7 +1,9 @@
 package go_rookie
 
 import (
+	"errors"
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/grerror"
 	"net/http"
 	"runtime"
 	"strings"
@@ -32,6 +34,15 @@ func Recovery(next HandlerFunc) HandlerFunc {
 	return func(ctx *Context) {
 		defer func() {
 			if err := recover(); err != nil {
+				err2 := err.(error)
+				if err2 != nil {
+					var grError *grerror.GrError
+					if errors.As(err2, &grError) {
+						grError.ExecuteResult()
+						return
+					}
+				}
+
 				ctx.Logger.Error(detailMsg(err))
 				ctx.Fail(http.StatusInternalServerError, "Internal Server Error")
 			}
