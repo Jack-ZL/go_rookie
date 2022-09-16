@@ -17,8 +17,9 @@ type HTMLRender struct {
 	Template *template.Template
 }
 
-func (h *HTML) Render(w http.ResponseWriter) error {
+func (h *HTML) Render(w http.ResponseWriter, code int) error {
 	h.WriteContentType(w)
+	w.WriteHeader(code)
 	if h.IsTemplate {
 		err := h.Template.ExecuteTemplate(w, h.Name, h.Data)
 		return err

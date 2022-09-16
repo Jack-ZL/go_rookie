@@ -5,7 +5,7 @@ import (
 )
 
 type Render interface {
-	Render(w http.ResponseWriter) error
+	Render(w http.ResponseWriter, code int) error
 	WriteContentType(w http.ResponseWriter)
 }
 

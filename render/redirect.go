@@ -12,7 +12,7 @@ type Redirect struct {
 	Location string
 }
 
-func (r *Redirect) Render(w http.ResponseWriter) error {
+func (r *Redirect) Render(w http.ResponseWriter, code int) error {
 	r.WriteContentType(w)
 	// status状态码判断
 	if (r.Code < http.StatusMultipleChoices ||

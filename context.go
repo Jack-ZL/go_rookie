@@ -516,8 +516,7 @@ func (c *Context) String(status int, format string, values ...any) error {
  * @return error
  */
 func (c *Context) Render(statusCode int, r render.Render) error {
-	c.W.WriteHeader(statusCode)
-	err := r.Render(c.W)
+	err := r.Render(c.W, statusCode)
 	c.StatusCode = statusCode
 	// 多次调用WriteHeader 产生：superfluous response.WriteHeader问题
 	// if statusCode != http.StatusOK {
@@ -588,4 +587,13 @@ func (c *Context) BindXML(obj any) error {
 
 func (c *Context) Fail(code int, msg string) {
 	c.String(code, msg)
+}
+
+func (c *Context) HandlerWithError(statusCode int, obj any, err error) {
+	if err != nil {
+		code, data := c.engine.errorHandler(err)
+		c.JSON(code, data)
+		return
+	}
+	c.JSON(statusCode, obj)
 }
