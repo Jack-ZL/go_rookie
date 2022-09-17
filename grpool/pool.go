@@ -30,6 +30,7 @@ type Pool struct {
 	lock        sync.Mutex    // 加锁，保证pool里面的资源的安全（即保护worker的资源）
 	once        sync.Once     // 释放操作只能调用一次，不能多次调用
 	workerCache sync.Pool     // worker缓存
+	cond        *sync.Cond    // 当有空闲的worker时通知阻塞进程
 }
 
 /**
@@ -64,6 +65,7 @@ func NewTimePool(c int, expire int) (*Pool, error) {
 			task: make(chan func(), 1),
 		}
 	}
+	p.cond = sync.NewCond(&p.lock)
 	go p.expireWorker()
 	return p, nil
 }
@@ -131,7 +133,7 @@ func (p *Pool) Submit(task func()) error {
  * @return *Worker
  */
 func (p *Pool) GetWorker() *Worker {
-	// 获取Pool里面的worker，如果有空闲的worker，直接获取
+	// 1、获取Pool里面的worker，如果有空闲的worker，直接获取
 	idleWorkers := p.workers
 	n := len(idleWorkers) - 1
 	if n >= 0 {
@@ -142,7 +144,7 @@ func (p *Pool) GetWorker() *Worker {
 		p.lock.Unlock()
 		return w
 	}
-	// 如果没有空闲的worker，则需要新建一个worker
+	// 2、如果没有空闲的worker，则需要新建一个worker
 	if p.running < p.cap {
 		// 新建一个worker
 		c := p.workerCache.Get()
@@ -159,21 +161,31 @@ func (p *Pool) GetWorker() *Worker {
 		w.run()
 		return w
 	}
-	// 如果 运行中的worker >= pool的容量，则阻塞等待有worker释放
-	for {
-		p.lock.Lock()
-		idleWorkers := p.workers
-		n := len(idleWorkers) - 1
-		if n < 0 {
-			p.lock.Unlock()
-			continue
-		}
-		w := idleWorkers[n]         // 去除末尾的那个worker
-		idleWorkers[n] = nil        // 被取走的位置置为nil
-		p.workers = idleWorkers[:n] // pool池中数量-1
+	// 3、如果 运行中的worker >= pool的容量，则阻塞等待有worker释放
+	return p.waitIdleWorker()
+}
+
+/**
+ * waitIdleWorker
+ * @Author：Jack-Z
+ * @Description: 阻塞等待有worker释放
+ * @receiver p
+ * @return *Worker
+ */
+func (p *Pool) waitIdleWorker() *Worker {
+	p.lock.Lock()
+	p.cond.Wait()
+	idleWorkers := p.workers
+	n := len(idleWorkers) - 1
+	if n < 0 {
 		p.lock.Unlock()
-		return w
+		return p.waitIdleWorker()
 	}
+	w := idleWorkers[n]         // 取出末尾的那个worker
+	idleWorkers[n] = nil        // 被取走的位置置为nil
+	p.workers = idleWorkers[:n] // pool池中数量-1
+	p.lock.Unlock()
+	return w
 }
 
 /**
@@ -190,6 +202,7 @@ func (p *Pool) PutWorker(w *Worker) {
 	w.lastTime = time.Now()
 	p.lock.Lock()
 	p.workers = append(p.workers, w)
+	p.cond.Signal()
 	p.lock.Unlock()
 }
 
