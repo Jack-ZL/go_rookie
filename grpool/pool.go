@@ -89,18 +89,21 @@ func (p *Pool) expireWorker() {
 		idleWorkers := p.workers
 		n := len(idleWorkers) - 1
 		if n >= 0 {
+			var cleanN = -1
 			for i, w := range idleWorkers {
 				if time.Now().Sub(w.lastTime) <= p.expire {
 					break
 				}
-				n = i
+				cleanN = i
 				w.task <- nil
+				idleWorkers[i] = nil
 			}
-
-			if n >= len(idleWorkers)-1 {
-				p.workers = idleWorkers[:0]
-			} else {
-				p.workers = idleWorkers[n+1:]
+			if cleanN != -1 {
+				if cleanN >= len(idleWorkers)-1 {
+					p.workers = idleWorkers[:0]
+				} else {
+					p.workers = idleWorkers[cleanN+1:]
+				}
 			}
 		}
 		p.lock.Unlock()
@@ -122,7 +125,6 @@ func (p *Pool) Submit(task func()) error {
 	// 获取pool池里面的一个worker，然后执行任务即可
 	w := p.GetWorker()
 	w.task <- task
-	w.pool.incRunning()
 	return nil
 }
 
@@ -135,10 +137,10 @@ func (p *Pool) Submit(task func()) error {
  */
 func (p *Pool) GetWorker() *Worker {
 	// 1、获取Pool里面的worker，如果有空闲的worker，直接获取
+	p.lock.Lock()
 	idleWorkers := p.workers
 	n := len(idleWorkers) - 1
 	if n >= 0 {
-		p.lock.Lock()
 		w := idleWorkers[n]         // 去除末尾的那个worker
 		idleWorkers[n] = nil        // 被取走的位置置为nil
 		p.workers = idleWorkers[:n] // pool池中数量-1
@@ -147,6 +149,7 @@ func (p *Pool) GetWorker() *Worker {
 	}
 	// 2、如果没有空闲的worker，则需要新建一个worker
 	if p.running < p.cap {
+		p.lock.Unlock()
 		// 新建一个worker
 		c := p.workerCache.Get()
 		var w *Worker
@@ -162,6 +165,8 @@ func (p *Pool) GetWorker() *Worker {
 		w.run()
 		return w
 	}
+	p.lock.Unlock()
+
 	// 3、如果 运行中的worker >= pool的容量，则阻塞等待有worker释放
 	return p.waitIdleWorker()
 }
@@ -283,4 +288,12 @@ func (p *Pool) Restart() bool {
 	_ = <-p.release
 	go p.expireWorker()
 	return true
+}
+
+func (p *Pool) Running() int {
+	return int(atomic.LoadInt32(&p.running))
+}
+
+func (p *Pool) Free() int {
+	return int(p.cap - p.running)
 }

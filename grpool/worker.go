@@ -13,6 +13,7 @@ type Worker struct {
 }
 
 func (w *Worker) run() {
+	w.pool.incRunning()
 	go w.running()
 }
 
@@ -45,6 +46,5 @@ func (w *Worker) running() {
 		f()
 		// 任务运行完成，worker空闲了把它放还到pool池中
 		w.pool.PutWorker(w)
-		w.pool.decRunning()
 	}
 }
