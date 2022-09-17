@@ -1,6 +1,9 @@
 package grpool
 
-import "time"
+import (
+	grLog "github.com/Jack-ZL/go_rookie/log"
+	"time"
+)
 
 type Worker struct {
 	pool     *Pool
@@ -20,6 +23,19 @@ func (w *Worker) run() {
  * @receiver w
  */
 func (w *Worker) running() {
+	defer func() {
+		w.pool.decRunning()
+		w.pool.workerCache.Put(w)
+		if err := recover(); err != nil {
+			// 捕获任务发生时的panic
+			if w.pool.PanicHandler != nil {
+				w.pool.PanicHandler()
+			} else {
+				grLog.Default().Error(err)
+			}
+		}
+		w.pool.cond.Signal()
+	}()
 	for f := range w.task {
 		if f == nil {
 			w.pool.workerCache.Put(w)
