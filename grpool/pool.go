@@ -57,12 +57,44 @@ func NewTimePool(c int, expire int) (*Pool, error) {
 		expire:  time.Duration(expire) * time.Second,
 		release: make(chan sig, 1),
 	}
-	go expireWorker()
+	go p.expireWorker()
 	return p, nil
 }
 
-func expireWorker() {
-	// 定时清理过期的空闲worker
+/**
+ * expireWorker
+ * @Author：Jack-Z
+ * @Description: 定时清理过期的空闲worker
+ * @receiver p
+ */
+func (p *Pool) expireWorker() {
+	// 使用定时器
+	ticker := time.NewTicker(p.expire)
+	for range ticker.C {
+		if p.IsClosed() { // 释放资源了就不用执行清除了
+			break
+		}
+		// 循环空闲的workers，如果当前时间和worker的最后运行任务的时间 间隔大于expire，则进行清理
+		p.lock.Lock()
+		idleWorkers := p.workers
+		n := len(idleWorkers) - 1
+		if n >= 0 {
+			for i, w := range idleWorkers {
+				if time.Now().Sub(w.lastTime) <= p.expire {
+					break
+				}
+				n = i
+				w.task <- nil
+			}
+
+			if n >= len(idleWorkers)-1 {
+				p.workers = idleWorkers[:0]
+			} else {
+				p.workers = idleWorkers[n+1:]
+			}
+		}
+		p.lock.Unlock()
+	}
 }
 
 /**
@@ -202,5 +234,6 @@ func (p *Pool) Restart() bool {
 		return true
 	}
 	_ = <-p.release
+	go p.expireWorker()
 	return true
 }
