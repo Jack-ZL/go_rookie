@@ -22,13 +22,14 @@ var (
  *  @Description: 定义一个pool协程池
  */
 type Pool struct {
-	cap     int32         // pool协程池的最大容量
-	running int32         // 正在运行的worker的数量
-	workers []*Worker     // 多个空闲的worker
-	expire  time.Duration // 过期时间：空闲的worker超过这个时间就回收
-	release chan sig      // 释放资源的关闭信号，pool就不能使用
-	lock    sync.Mutex    // 加锁，保证pool里面的资源的安全（即保护worker的资源）
-	once    sync.Once     // 释放操作只能调用一次，不能多次调用
+	cap         int32         // pool协程池的最大容量
+	running     int32         // 正在运行的worker的数量
+	workers     []*Worker     // 多个空闲的worker
+	expire      time.Duration // 过期时间：空闲的worker超过这个时间就回收
+	release     chan sig      // 释放资源的关闭信号，pool就不能使用
+	lock        sync.Mutex    // 加锁，保证pool里面的资源的安全（即保护worker的资源）
+	once        sync.Once     // 释放操作只能调用一次，不能多次调用
+	workerCache sync.Pool     // worker缓存
 }
 
 /**
@@ -56,6 +57,12 @@ func NewTimePool(c int, expire int) (*Pool, error) {
 		cap:     int32(c),
 		expire:  time.Duration(expire) * time.Second,
 		release: make(chan sig, 1),
+	}
+	p.workerCache.New = func() any {
+		return &Worker{
+			pool: p,
+			task: make(chan func(), 1),
+		}
 	}
 	go p.expireWorker()
 	return p, nil
@@ -138,10 +145,17 @@ func (p *Pool) GetWorker() *Worker {
 	// 如果没有空闲的worker，则需要新建一个worker
 	if p.running < p.cap {
 		// 新建一个worker
-		w := &Worker{
-			pool: p,
-			task: make(chan func(), 1),
+		c := p.workerCache.Get()
+		var w *Worker
+		if c == nil {
+			w = &Worker{
+				pool: p,
+				task: make(chan func(), 1),
+			}
+		} else {
+			w = c.(*Worker)
 		}
+
 		w.run()
 		return w
 	}
