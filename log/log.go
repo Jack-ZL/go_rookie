@@ -94,6 +94,12 @@ type LoggerFormatter struct {
 	LoggerFields Fields
 }
 
+/**
+ * New
+ * @Author：Jack-Z
+ * @Description: 实例化一个logger
+ * @return *Logger
+ */
 func New() *Logger {
 	return &Logger{}
 }
@@ -101,7 +107,7 @@ func New() *Logger {
 /**
  * Default
  * @Author：Jack-Z
- * @Description: 默认日志输出
+ * @Description: 默认日志输出引擎
  * @return *Logger
  */
 func Default() *Logger {
@@ -224,6 +230,7 @@ func (l *Logger) CheckFileSize(w *LoggerWriter) {
 		if l.LogFileSize <= 0 {
 			l.LogFileSize = 100 << 20
 		}
+		// 日志文件过大时，进行切片
 		if size >= l.LogFileSize {
 			_, name := path.Split(stat.Name())
 			fileName := name[0:strings.Index(name, ".")]

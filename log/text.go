@@ -38,7 +38,7 @@ func (f *TextFormatter) Format(param *LoggingFormatParam) string {
 	if param.Level == LevelError {
 		msgInfo = "\n Error Cause By: "
 	}
-	if param.IsColor {
+	if param.IsColor { // 带颜色的日志打印
 		levelColor := f.LevelColor(param.Level)
 		msgColor := f.MsgColor(param.Level)
 		return fmt.Sprintf("%s [go_rookie] %s %s%v%s | level= %s %s %s%s%s %v %s %s ",
@@ -89,7 +89,7 @@ func (f *TextFormatter) LevelColor(level LoggerLevel) string {
 /**
  * MsgColor
  * @Author：Jack-Z
- * @Description: 日志文字的颜色：除了error级别为红色文字，其他默认
+ * @Description: 日志信息文字的颜色：除了error级别为红色文字，其他默认
  * @receiver f
  * @param level
  * @return string

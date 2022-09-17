@@ -13,8 +13,8 @@ import (
 )
 
 type jsonBinding struct {
-	DisallowUnknownFields bool
-	IsValidate            bool
+	DisallowUnknownFields bool // 参数中有的属性，但是对应的结构体没有时，是否校验
+	IsValidate            bool // 传参中没有，而接收的结构体中有的参数时，是否校验
 }
 
 func (jsonBinding) Name() string {

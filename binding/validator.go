@@ -25,6 +25,13 @@ type defaultValidator struct {
  */
 type SliceValidationError []error
 
+/**
+ * Error
+ * @Author：Jack-Z
+ * @Description: 批量错误信息的格式化
+ * @receiver err
+ * @return string
+ */
 func (err SliceValidationError) Error() string {
 	n := len(err)
 	switch n {
@@ -65,6 +72,14 @@ func (d *defaultValidator) Engine() any {
 	return d.validate
 }
 
+/**
+ * validateStruct
+ * @Author：Jack-Z
+ * @Description: 结构体检验
+ * @receiver d
+ * @param data
+ * @return error
+ */
 func (d *defaultValidator) validateStruct(data any) error {
 	d.lazyInit()
 	return d.validate.Struct(data)

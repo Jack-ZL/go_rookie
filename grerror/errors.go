@@ -15,7 +15,6 @@ func (e *GrError) Error() string {
 
 func (e *GrError) Put(err error) {
 	e.Check(err)
-
 }
 
 func (e *GrError) Check(err error) {
@@ -31,7 +30,11 @@ func (e *GrError) Result(errFunc ErrorFunc) {
 	e.ErrFunc = errFunc
 }
 
-// 暴漏方法，让用户自定义
-func (e *GrError) ExecuteResult() {
+/**
+ * ExecuteResult
+ * @Author：Jack-Z
+ * @Description: 对外暴露方法，让用户自定义
+ * @receiver e
+ */func (e *GrError) ExecuteResult() {
 	e.ErrFunc(e)
 }
