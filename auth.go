@@ -8,6 +8,7 @@ import (
 type Accounts struct {
 	UnAuthHandler func(ctx *Context)
 	Users         map[string]string
+	Realm         string
 }
 
 func (a *Accounts) BasicAuth(next HandlerFunc) HandlerFunc {
@@ -37,6 +38,7 @@ func (a *Accounts) unAuthHandler(ctx *Context) {
 	if a.UnAuthHandler != nil {
 		a.UnAuthHandler(ctx)
 	} else {
+		ctx.W.Header().Set("WWW-Authenticate", a.Realm)
 		ctx.W.WriteHeader(http.StatusUnauthorized)
 	}
 }
