@@ -290,7 +290,7 @@ func (e *Engine) RunTLS(addr, certFile, keyFile string) {
 }
 
 func (e *Engine) Use(middles ...MiddlewareFunc) {
-	e.middles = middles
+	e.middles = append(e.middles, middles...)
 }
 
 /**

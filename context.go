@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 )
 
 const defaultMultipartMemory = 32 << 20 // 默认是分配32M的内存
@@ -27,6 +28,29 @@ type Context struct {
 	IsValidate            bool
 	StatusCode            int
 	Logger                *grLog.Logger
+	Keys                  map[string]any
+	mu                    sync.RWMutex
+}
+
+func (c *Context) Set(key string, value any) {
+	c.mu.Lock()
+
+	if c.Keys == nil {
+		c.Keys = make(map[string]any)
+	}
+	c.Keys[key] = value
+	c.mu.Unlock()
+}
+
+func (c *Context) Get(key string) (any, bool) {
+	c.mu.Lock()
+	value, ok := c.Keys[key]
+	c.mu.Unlock()
+	return value, ok
+}
+
+func (c *Context) SetBasicAuth(username, password string) {
+	c.R.Header.Set("Authorization", "GOROOKIE"+BasicAuth(username, password))
 }
 
 // 处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
