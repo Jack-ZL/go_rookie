@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/Jack-ZL/go_rookie"
 	"github.com/golang-jwt/jwt/v4"
+	"net/http"
 	"time"
 )
 
@@ -24,6 +25,8 @@ type JwtHandler struct {
 	CookieDomain   string
 	SecureCookie   bool
 	CookieHTTPOnly bool
+	Header         string // header名字
+	AuthHandler    func(ctx *go_rookie.Context, err error)
 }
 
 type JwtResponse struct {
@@ -248,4 +251,63 @@ func (j *JwtHandler) RefreshHandler(ctx *go_rookie.Context) (*JwtResponse, error
 		ctx.SetCookie(j.CookieName, tokenString, int(j.CookieMaxAge), "/", j.CookieDomain, j.SecureCookie, j.CookieHTTPOnly)
 	}
 	return jr, nil
+}
+
+/**
+ * AuthInterceptor
+ * @Author：Jack-Z
+ * @Description: jwt中间件
+ * @receiver j
+ * @param next
+ * @return go_rookie.HandlerFunc
+ */
+func (j *JwtHandler) AuthInterceptor(next go_rookie.HandlerFunc) go_rookie.HandlerFunc {
+	return func(ctx *go_rookie.Context) {
+		if j.Header == "" {
+			j.Header = "Authorization"
+		}
+		token := ctx.R.Header.Get(j.Header)
+		if token == "" {
+			if j.SendCookie {
+				cookie, err := ctx.R.Cookie(j.CookieName)
+				if err != nil {
+					j.AuthErrorHandler(ctx, err)
+
+					return
+				}
+				token = cookie.String()
+			}
+		}
+
+		if token == "" {
+			j.AuthErrorHandler(ctx, errors.New("token is null or empty"))
+
+			return
+		}
+
+		// 解析token
+		t, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+			if j.usingPublicKeyAlgo() {
+				return j.PrivateKey, nil
+			} else {
+				return j.Key, nil
+			}
+		})
+		if err != nil {
+			j.AuthErrorHandler(ctx, err)
+
+			return
+		}
+		claims := t.Claims.(jwt.MapClaims)
+		ctx.Set("jwt_claims", claims)
+		next(ctx)
+	}
+}
+
+func (j *JwtHandler) AuthErrorHandler(ctx *go_rookie.Context, err error) {
+	if j.AuthHandler == nil {
+		ctx.W.WriteHeader(http.StatusUnauthorized)
+	} else {
+		j.AuthHandler(ctx, err)
+	}
 }
