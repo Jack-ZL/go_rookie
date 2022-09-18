@@ -30,6 +30,11 @@ type Context struct {
 	Logger                *grLog.Logger
 	Keys                  map[string]any
 	mu                    sync.RWMutex
+	sameSite              http.SameSite // 降低跨域信息泄露的风险，并为跨站点请求伪造攻击提供一些保护
+}
+
+func (c *Context) SetSameSite(s http.SameSite) {
+	c.sameSite = s
 }
 
 func (c *Context) Set(key string, value any) {
@@ -620,4 +625,33 @@ func (c *Context) HandlerWithError(statusCode int, obj any, err error) {
 		return
 	}
 	c.JSON(statusCode, obj)
+}
+
+/**
+ * SetCookie
+ * @Author：Jack-Z
+ * @Description: 设置cookie
+ * @receiver c
+ * @param name
+ * @param value
+ * @param maxAge
+ * @param path
+ * @param domain
+ * @param secure
+ * @param httpOnly
+ */
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	if path == "" {
+		path = "/"
+	}
+	http.SetCookie(c.W, &http.Cookie{
+		Name:     name,
+		Value:    url.QueryEscape(value),
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		SameSite: c.sameSite,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+	})
 }

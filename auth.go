@@ -38,7 +38,7 @@ func (a *Accounts) unAuthHandler(ctx *Context) {
 	if a.UnAuthHandler != nil {
 		a.UnAuthHandler(ctx)
 	} else {
-		ctx.W.Header().Set("WWW-Authenticate", a.Realm)
+		ctx.W.Header().Set("WWW-Authenticate", a.Realm) // 摘要认证（Digest）
 		ctx.W.WriteHeader(http.StatusUnauthorized)
 	}
 }
