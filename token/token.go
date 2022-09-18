@@ -1,17 +1,21 @@
 package token
 
 import (
+	"errors"
 	"github.com/Jack-ZL/go_rookie"
 	"github.com/golang-jwt/jwt/v4"
 	"time"
 )
+
+const JWTToken = "gr_token"
 
 type JwtHandler struct {
 	Alg            string           // jwt的加密算法
 	TimeOut        time.Duration    // 过期时间
 	RefreshTimeOut time.Duration    // refreshToken的过期时间
 	TimeFunc       func() time.Time // 时间函数
-	Key            []byte           // 加密密钥
+	Key            []byte           // token的key
+	RefreshKey     string           // 刷新的key
 	PrivateKey     string           // 私钥
 	SendCookie     bool             // 是否发送存储到cookie
 	Authenticator  func(ctx *go_rookie.Context) (map[string]any, error)
@@ -93,7 +97,7 @@ func (j *JwtHandler) LoginHandler(ctx *go_rookie.Context) (*JwtResponse, error) 
 	if j.SendCookie {
 		// 发送到cookie存储
 		if j.CookieName == "" {
-			j.CookieName = "gr_token"
+			j.CookieName = JWTToken
 		}
 		if j.CookieMaxAge == 0 {
 			j.CookieMaxAge = expire.Unix() - j.TimeFunc().Unix()
@@ -130,7 +134,7 @@ func (j *JwtHandler) usingPublicKeyAlgo() bool {
  */
 func (j *JwtHandler) refreshToken(token *jwt.Token) (string, error) {
 	claims := token.Claims.(jwt.MapClaims)
-	claims["exp"] = j.TimeFunc().Add(j.RefreshTimeOut)
+	claims["exp"] = j.TimeFunc().Add(j.RefreshTimeOut).Unix()
 
 	var tokenString string
 	var tokenError error
@@ -144,4 +148,104 @@ func (j *JwtHandler) refreshToken(token *jwt.Token) (string, error) {
 		return "", tokenError
 	}
 	return tokenString, nil
+}
+
+/**
+ * LogoutHandler
+ * @Author：Jack-Z
+ * @Description: 推出登录
+ * @receiver j
+ * @param ctx
+ * @return error
+ */
+func (j *JwtHandler) LogoutHandler(ctx *go_rookie.Context) error {
+	// 清除cookie即可
+	if j.SendCookie {
+		if j.CookieName == "" {
+			j.CookieName = JWTToken
+		}
+		ctx.SetCookie(j.CookieName, "", -1, "/", j.CookieDomain, j.SecureCookie, j.CookieHTTPOnly)
+		return nil
+	}
+
+	return nil
+}
+
+/**
+ * RefreshHandler
+ * @Author：Jack-Z
+ * @Description: 刷新token
+ * @receiver j
+ * @param ctx
+ * @return *JwtResponse
+ * @return error
+ */
+func (j *JwtHandler) RefreshHandler(ctx *go_rookie.Context) (*JwtResponse, error) {
+	rToken, ok := ctx.Get(j.RefreshKey)
+	if !ok {
+		return nil, errors.New("refreshToken is null")
+	}
+
+	if j.Alg == "" {
+		j.Alg = "HS256"
+	}
+
+	// 解析token
+	t, err := jwt.Parse(rToken.(string), func(token *jwt.Token) (interface{}, error) {
+		if j.usingPublicKeyAlgo() {
+			return j.PrivateKey, nil
+		} else {
+			return j.Key, nil
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// part-B
+	claims := t.Claims.(jwt.MapClaims)
+	if j.TimeFunc == nil {
+		j.TimeFunc = func() time.Time {
+			return time.Now()
+		}
+	}
+
+	expire := j.TimeFunc().Add(j.TimeOut)
+	claims["exp"] = expire.Unix() // 过期时间
+	claims["iat"] = j.TimeFunc().Unix()
+
+	// part-C
+	var tokenString string
+	var tokenError error
+	if j.usingPublicKeyAlgo() {
+		tokenString, tokenError = t.SignedString(j.PrivateKey)
+	} else {
+		tokenString, tokenError = t.SignedString(j.Key)
+	}
+
+	if tokenError != nil {
+		return nil, tokenError
+	}
+
+	jr := &JwtResponse{
+		Token: tokenString,
+	}
+
+	refreshToken, err := j.refreshToken(t)
+	if err != nil {
+		return nil, err
+	}
+	jr.RefreshToken = refreshToken
+	if j.SendCookie {
+		// 发送到cookie存储
+		if j.CookieName == "" {
+			j.CookieName = JWTToken
+		}
+		if j.CookieMaxAge == 0 {
+			j.CookieMaxAge = expire.Unix() - j.TimeFunc().Unix()
+
+		}
+		ctx.SetCookie(j.CookieName, tokenString, int(j.CookieMaxAge), "/", j.CookieDomain, j.SecureCookie, j.CookieHTTPOnly)
+	}
+	return jr, nil
 }
