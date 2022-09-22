@@ -2,6 +2,7 @@ package go_rookie
 
 import (
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/config"
 	grLog "github.com/Jack-ZL/go_rookie/log"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
@@ -171,6 +172,10 @@ func New() *Engine {
 func Default() *Engine {
 	engine := New()
 	engine.Logger = grLog.Default()
+	logPath, ok := config.Conf.Log["path"]
+	if ok {
+		engine.Logger.SetLogPath(logPath.(string))
+	}
 	engine.Use(Logging, Recovery)
 	engine.router.engine = engine
 	return engine
@@ -194,6 +199,20 @@ func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
 func (e *Engine) LoadTemplate(pattern string) {
 	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
 	e.SetHtmlTemplate(t)
+}
+
+/**
+ * LoadTemplateConf
+ * @Author：Jack-Z
+ * @Description: 加载模板（按配置文件指定的目录）
+ * @receiver e
+ */
+func (e *Engine) LoadTemplateConf() {
+	pattern, ok := config.Conf.Template["pattern"]
+	if ok {
+		t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern.(string)))
+		e.SetHtmlTemplate(t)
+	}
 }
 
 /**
