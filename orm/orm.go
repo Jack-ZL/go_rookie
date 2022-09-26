@@ -105,6 +105,7 @@ func (s *GrSession) Table(tableName string) *GrSession {
  * Insert
  * @Author：Jack-Z
  * @Description: （单条）插入数据操作
+ * 示例：insert into tableName (x,x) values (?, ?)
  * @receiver s
  * @param data
  * @return int64 插入数据的id
@@ -141,6 +142,61 @@ func (s *GrSession) Insert(data any) (int64, int64, error) {
 }
 
 /**
+ * InsertBatch
+ * @Author：Jack-Z
+ * @Description: 批量插入数据操作
+ * 示例：insert into tableName (x,x) values (?, ?), (?, ?)
+ * @receiver s
+ * @param data
+ * @return int64
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
+	if len(data) == 0 {
+		return -1, -1, errors.New("no data to insert")
+	}
+
+	s.fieldNames(data)
+	query := fmt.Sprintf("insert into %s (%s) values",
+		s.tableName,
+		strings.Join(s.fieldName, ","))
+
+	var sb strings.Builder
+	sb.WriteString(query)
+	for index, _ := range data {
+		sb.WriteString("(")
+		sb.WriteString(strings.Join(s.placeHolder, ","))
+		sb.WriteString(")")
+		if index < len(data)-1 {
+			sb.WriteString(",")
+		}
+	}
+	s.batchValues(data)
+
+	s.db.logger.Info(sb.String())
+	sp, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return -1, -1, err
+	}
+	res, err := sp.Exec(s.values...)
+	if err != nil {
+		return -1, -1, err
+	}
+	last_id, err := res.LastInsertId() // 获取插入的主键id
+	if err != nil {
+		return -1, -1, err
+	}
+
+	affected, err := res.RowsAffected() // 受影响行数
+	if err != nil {
+		return -1, -1, err
+	}
+	return last_id, affected, err
+
+}
+
+/**
  * fieldNames
  * @Author：Jack-Z
  * @Description: insert的字段处理
@@ -170,7 +226,6 @@ func (s *GrSession) fieldNames(data any) {
 				// 自增长的主键id
 				continue
 			}
-
 			if strings.Contains(sqlTag, ",") {
 				sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
 			}
@@ -184,6 +239,46 @@ func (s *GrSession) fieldNames(data any) {
 		s.fieldName = append(s.fieldName, sqlTag)
 		s.placeHolder = append(s.placeHolder, "?")
 		s.values = append(s.values, vVar.Field(i).Interface())
+	}
+}
+
+/**
+ * batchValues
+ * @Author：Jack-Z
+ * @Description: 多条数据的value处理
+ * @receiver s
+ * @param data
+ */
+func (s *GrSession) batchValues(data []any) {
+	s.values = make([]any, 0)
+	for _, v := range data {
+		t := reflect.TypeOf(v)
+		v := reflect.ValueOf(v)
+		if t.Kind() != reflect.Pointer {
+			panic(errors.New("data must be pointer"))
+		}
+
+		tVar := t.Elem()
+		vVar := v.Elem()
+		for i := 0; i < tVar.NumField(); i++ {
+			fieldName := tVar.Field(i).Name
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("grorm")
+			if sqlTag == "" {
+				sqlTag = strings.ToLower(Name(fieldName))
+			} else {
+				if strings.Contains(sqlTag, "auto_increment") {
+					// 自增长的主键id
+					continue
+				}
+			}
+			id := vVar.Field(i).Interface()
+			// 对id做个判断，如果其值小于等于0，数据库可能是自增，跳过此字段
+			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
+				continue
+			}
+			s.values = append(s.values, vVar.Field(i).Interface())
+		}
 	}
 }
 
