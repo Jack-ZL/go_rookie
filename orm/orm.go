@@ -22,6 +22,9 @@ type GrSession struct {
 	fieldName   []string
 	placeHolder []string
 	values      []any
+	whereValues []any
+	updateParam strings.Builder
+	whereParam  strings.Builder
 }
 
 /**
@@ -193,7 +196,82 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
 		return -1, -1, err
 	}
 	return last_id, affected, err
+}
 
+/**
+ * Update
+ * @Author：Jack-Z
+ * @Description: update更新操作
+ * update user set age = 10 where id = 100;
+ * @receiver s
+ * @param data
+ * @return int64
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) Update(data ...any) (int64, int64, error) {
+	if len(data) == 0 || len(data) > 2 {
+		return -1, -1, errors.New("param not valid")
+	}
+	single := true
+	if len(data) == 2 {
+		single = false
+	}
+	if !single {
+		if s.updateParam.String() != "" {
+			s.updateParam.WriteString(",")
+		}
+		s.updateParam.WriteString(data[0].(string))
+		s.updateParam.WriteString("= ?")
+		s.values = append(s.values, data[1])
+	}
+	query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+
+	sp, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return -1, -1, err
+	}
+	s.values = append(s.values, s.whereValues...)
+	res, err := sp.Exec(s.values...)
+	if err != nil {
+		return -1, -1, err
+	}
+	last_id, err := res.LastInsertId() // 获取插入的主键id
+	if err != nil {
+		return -1, -1, err
+	}
+
+	affected, err := res.RowsAffected() // 受影响行数
+	if err != nil {
+		return -1, -1, err
+	}
+	return last_id, affected, err
+}
+
+/**
+ * Where
+ * @Author：Jack-Z
+ * @Description: where条件处理
+ * @receiver s
+ * @param field 字段
+ * @param value 值
+ * @return *GrSession
+ */
+func (s *GrSession) Where(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	} else {
+		s.whereParam.WriteString(", ")
+	}
+
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" = ?")
+	s.whereValues = append(s.whereValues, value)
+	return s
 }
 
 /**
