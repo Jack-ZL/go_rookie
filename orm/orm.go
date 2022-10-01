@@ -210,8 +210,35 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
  * @return error
  */
 func (s *GrSession) Update(data ...any) (int64, int64, error) {
-	if len(data) == 0 || len(data) > 2 {
+	if len(data) > 2 {
 		return -1, -1, errors.New("param not valid")
+	}
+	if len(data) == 0 {
+		query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
+		var sb strings.Builder
+		sb.WriteString(query)
+		sb.WriteString(s.whereParam.String())
+		s.db.logger.Info(sb.String())
+
+		sp, err := s.db.db.Prepare(sb.String())
+		if err != nil {
+			return -1, -1, err
+		}
+		s.values = append(s.values, s.whereValues...)
+		res, err := sp.Exec(s.values...)
+		if err != nil {
+			return -1, -1, err
+		}
+		last_id, err := res.LastInsertId() // 获取插入的主键id
+		if err != nil {
+			return -1, -1, err
+		}
+
+		affected, err := res.RowsAffected() // 受影响行数
+		if err != nil {
+			return -1, -1, err
+		}
+		return last_id, affected, err
 	}
 	single := true
 	if len(data) == 2 {
@@ -224,6 +251,47 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 		s.updateParam.WriteString(data[0].(string))
 		s.updateParam.WriteString("= ?")
 		s.values = append(s.values, data[1])
+	} else {
+		updateData := data[0]
+
+		t := reflect.TypeOf(updateData)
+		v := reflect.ValueOf(updateData)
+		if t.Kind() != reflect.Pointer {
+			panic(errors.New("updateData must be pointer"))
+		}
+
+		tVar := t.Elem()
+		vVar := v.Elem()
+		if s.tableName == "" {
+			s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name()))
+		}
+		for i := 0; i < tVar.NumField(); i++ {
+			fieldName := tVar.Field(i).Name
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("grorm")
+			if sqlTag == "" {
+				sqlTag = strings.ToLower(Name(fieldName))
+			} else {
+				if strings.Contains(sqlTag, "auto_increment") {
+					// 自增长的主键id
+					continue
+				}
+				if strings.Contains(sqlTag, ",") {
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+			id := vVar.Field(i).Interface()
+			// 对id做个判断，如果其值小于等于0，数据库可能是自增，跳过此字段
+			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
+				continue
+			}
+			if s.updateParam.String() != "" {
+				s.updateParam.WriteString(",")
+			}
+			s.updateParam.WriteString(sqlTag)
+			s.updateParam.WriteString("= ?")
+			s.values = append(s.values, vVar.Field(i).Interface())
+		}
 	}
 	query := fmt.Sprintf("update %s set %s", s.tableName, s.updateParam.String())
 	var sb strings.Builder
@@ -253,6 +321,50 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 }
 
 /**
+ * UpdateParam
+ * @Author：Jack-Z
+ * @Description: 支持"字段， 值"的更新方式
+ * 调用方式：db.New().Table("xxxx").Where("id", 10).UpdateParam("age", 34).Update()
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) UpdateParam(field string, value any) *GrSession {
+	if s.updateParam.String() != "" {
+		s.updateParam.WriteString(",")
+	}
+	s.updateParam.WriteString(field)
+	s.updateParam.WriteString(" = ?")
+	s.values = append(s.values, value)
+	return s
+}
+
+/*
+*
+  - UpdateMap
+  - @Author：Jack-Z
+  - @Description: 支持map格式的更新值
+  - 调用方式：db.New().Table("xxxx").Where("id", 10).UpdateMap(map[string]interface{}{
+    "age": 34,
+    }).Update()
+  - @receiver s
+  - @param data
+  - @return *GrSession
+*/
+func (s *GrSession) UpdateMap(data map[string]any) *GrSession {
+	for k, v := range data {
+		if s.updateParam.String() != "" {
+			s.updateParam.WriteString(",")
+		}
+		s.updateParam.WriteString(k)
+		s.updateParam.WriteString(" = ?")
+		s.values = append(s.values, v)
+	}
+	return s
+}
+
+/**
  * Where
  * @Author：Jack-Z
  * @Description: where条件处理
@@ -265,7 +377,20 @@ func (s *GrSession) Where(field string, value any) *GrSession {
 	if s.whereParam.String() == "" {
 		s.whereParam.WriteString(" where ")
 	} else {
-		s.whereParam.WriteString(", ")
+		s.whereParam.WriteString(" and ")
+	}
+
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" = ?")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+func (s *GrSession) Or(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	} else {
+		s.whereParam.WriteString(" or ")
 	}
 
 	s.whereParam.WriteString(field)
