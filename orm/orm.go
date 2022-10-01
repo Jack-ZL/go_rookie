@@ -367,7 +367,7 @@ func (s *GrSession) UpdateMap(data map[string]any) *GrSession {
 /**
  * Where
  * @Author：Jack-Z
- * @Description: where条件处理
+ * @Description: where 字段=值 条件处理
  * @receiver s
  * @param field 字段
  * @param value 值
@@ -386,6 +386,15 @@ func (s *GrSession) Where(field string, value any) *GrSession {
 	return s
 }
 
+/**
+ * Or
+ * @Author：Jack-Z
+ * @Description: where 字段=值 or 字段=值
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
 func (s *GrSession) Or(field string, value any) *GrSession {
 	if s.whereParam.String() == "" {
 		s.whereParam.WriteString(" where ")
