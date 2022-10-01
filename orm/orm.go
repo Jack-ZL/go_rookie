@@ -202,6 +202,7 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
  * Update
  * @Author：Jack-Z
  * @Description: update更新操作
+ * 调用方式；db.New().Where("id", 1006).Where("age", 54).Update(user)
  * update user set age = 10 where id = 100;
  * @receiver s
  * @param data
@@ -345,9 +346,13 @@ func (s *GrSession) UpdateParam(field string, value any) *GrSession {
   - UpdateMap
   - @Author：Jack-Z
   - @Description: 支持map格式的更新值
-  - 调用方式：db.New().Table("xxxx").Where("id", 10).UpdateMap(map[string]interface{}{
-    "age": 34,
-    }).Update()
+  - 调用方式：db.
+    New().Table("gr_user").
+    Where("id", 2).
+    UpdateMap(map[string]interface{}{
+    "password": "iiiiiiii",
+    }).
+    Update()
   - @receiver s
   - @param data
   - @return *GrSession
