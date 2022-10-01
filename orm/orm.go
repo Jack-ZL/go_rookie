@@ -160,7 +160,7 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
 		return -1, -1, errors.New("no data to insert")
 	}
 
-	s.fieldNames(data)
+	s.fieldNames(data[0])
 	query := fmt.Sprintf("insert into %s (%s) values",
 		s.tableName,
 		strings.Join(s.fieldName, ","))
