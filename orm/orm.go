@@ -392,13 +392,22 @@ func (s *GrSession) UpdateMap(data map[string]any) *GrSession {
 func (s *GrSession) Where(field string, value any) *GrSession {
 	if s.whereParam.String() == "" {
 		s.whereParam.WriteString(" where ")
-	} else {
-		s.whereParam.WriteString(" and ")
 	}
-
 	s.whereParam.WriteString(field)
 	s.whereParam.WriteString(" = ?")
 	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
+ * And
+ * @Author：Jack-Z
+ * @Description: where 字段=值 and 字段1=值1 条件处理
+ * @receiver s
+ * @return *GrSession
+ */
+func (s *GrSession) And() *GrSession {
+	s.whereParam.WriteString(" and ")
 	return s
 }
 
@@ -407,20 +416,10 @@ func (s *GrSession) Where(field string, value any) *GrSession {
  * @Author：Jack-Z
  * @Description: where 字段=值 or 字段=值
  * @receiver s
- * @param field
- * @param value
  * @return *GrSession
  */
-func (s *GrSession) Or(field string, value any) *GrSession {
-	if s.whereParam.String() == "" {
-		s.whereParam.WriteString(" where ")
-	} else {
-		s.whereParam.WriteString(" or ")
-	}
-
-	s.whereParam.WriteString(field)
-	s.whereParam.WriteString(" = ?")
-	s.whereValues = append(s.whereValues, value)
+func (s *GrSession) Or() *GrSession {
+	s.whereParam.WriteString(" or ")
 	return s
 }
 
@@ -638,4 +637,30 @@ func (s *GrSession) SelectOne(data any, fields ...string) error {
 		}
 	}
 	return nil
+}
+
+/**
+ * Delete
+ * @Author：Jack-Z
+ * @Description: delete——删除数据
+ * @receiver s
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) Delete() (int64, error) {
+	query := fmt.Sprintf("delete from %s ", s.tableName)
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+
+	prepare, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return 0, err
+	}
+	exec, err := prepare.Exec(s.whereValues...)
+	if err != nil {
+		return 0, err
+	}
+	return exec.RowsAffected()
 }
