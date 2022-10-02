@@ -274,9 +274,7 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 
 		tVar := t.Elem()
 		vVar := v.Elem()
-		if s.tableName == "" {
-			s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name()))
-		}
+
 		for i := 0; i < tVar.NumField(); i++ {
 			fieldName := tVar.Field(i).Name
 			tag := tVar.Field(i).Tag
@@ -637,6 +635,90 @@ func (s *GrSession) SelectOne(data any, fields ...string) error {
 		}
 	}
 	return nil
+}
+
+/**
+ * Select
+ * @Author：Jack-Z
+ * @Description: select--查询多条数据
+ * @receiver s
+ * @param data
+ * @param fields
+ * @return []any
+ * @return error
+ */
+func (s *GrSession) Select(data any, fields ...string) ([]any, error) {
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Pointer {
+		return nil, errors.New("data must be a pointer")
+	}
+
+	fieldsStr := "*"
+	if len(fields) > 0 {
+		fieldsStr = strings.Join(fields, ",")
+	}
+	query := fmt.Sprintf("select %s from %s", fieldsStr, s.tableName)
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+
+	prepare, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return nil, err
+	}
+	rows, err := prepare.Query(s.whereValues...)
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]any, 0)
+	for {
+
+		if rows.Next() {
+			data := reflect.New(t.Elem()).Interface()
+			values := make([]any, len(columns))
+			fieldsScan := make([]any, len(columns))
+			for i := range fieldsScan {
+				fieldsScan[i] = &values[i]
+			}
+
+			err := rows.Scan(fieldsScan...)
+			if err != nil {
+				return nil, err
+			}
+			tVar := t.Elem()
+			vVar := reflect.ValueOf(data).Elem()
+			for i := 0; i < tVar.NumField(); i++ {
+				name := tVar.Field(i).Name
+				tag := tVar.Field(i).Tag
+				sqlTag := tag.Get("grorm")
+				if sqlTag == "" {
+					sqlTag = strings.ToLower(Name(name))
+				} else {
+					if strings.Contains(sqlTag, ",") {
+						sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+					}
+				}
+
+				for j, colName := range columns {
+					if sqlTag == colName {
+						target := values[j]
+						targetVal := reflect.ValueOf(target)
+						fieldType := tVar.Field(i).Type
+						// 	类型转换
+						result := reflect.ValueOf(targetVal.Interface()).Convert(fieldType)
+						vVar.Field(i).Set(result)
+					}
+				}
+			}
+			result = append(result, data)
+		} else {
+			break
+		}
+	}
+	return result, nil
 }
 
 /**
