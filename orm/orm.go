@@ -85,10 +85,21 @@ func (db *GrDb) Close() error {
  * @receiver db
  * @return *GrSession
  */
-func (db *GrDb) New() *GrSession {
-	return &GrSession{
+func (db *GrDb) New(data any) *GrSession {
+	s := &GrSession{
 		db: db,
 	}
+
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Pointer {
+		panic(errors.New("data must be pointer"))
+	}
+
+	tVar := t.Elem()
+	if s.tableName == "" {
+		s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name()))
+	}
+	return s
 }
 
 /**
@@ -553,4 +564,78 @@ func Name(name string) string {
 	}
 	sb.WriteString(name[lastIndex:])
 	return sb.String()
+}
+
+/**
+ * SelectOne
+ * @Author：Jack-Z
+ * @Description: selelct——查询数据（单条）
+ * @receiver s
+ * @param data 查询结果的映射数据
+ * @param fields 查询的字段
+ * @return error
+ */
+func (s *GrSession) SelectOne(data any, fields ...string) error {
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Pointer {
+		return errors.New("data must be a pointer")
+	}
+
+	fieldsStr := "*"
+	if len(fields) > 0 {
+		fieldsStr = strings.Join(fields, ",")
+	}
+	query := fmt.Sprintf("select %s from %s", fieldsStr, s.tableName)
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+
+	prepare, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return err
+	}
+	rows, err := prepare.Query(s.whereValues...)
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	values := make([]any, len(columns))
+	fieldsScan := make([]any, len(columns))
+	for i := range fieldsScan {
+		fieldsScan[i] = &values[i]
+	}
+
+	if rows.Next() {
+		err := rows.Scan(fieldsScan...)
+		if err != nil {
+			return err
+		}
+		tVar := t.Elem()
+		vVar := reflect.ValueOf(data).Elem()
+		for i := 0; i < tVar.NumField(); i++ {
+			name := tVar.Field(i).Name
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("grorm")
+			if sqlTag == "" {
+				sqlTag = strings.ToLower(Name(name))
+			} else {
+				if strings.Contains(sqlTag, ",") {
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+
+			for j, colName := range columns {
+				if sqlTag == colName {
+					target := values[j]
+					targetVal := reflect.ValueOf(target)
+					fieldType := tVar.Field(i).Type
+					// 	类型转换
+					result := reflect.ValueOf(targetVal.Interface()).Convert(fieldType)
+					vVar.Field(i).Set(result)
+				}
+			}
+		}
+	}
+	return nil
 }
