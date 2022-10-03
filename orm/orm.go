@@ -398,6 +398,189 @@ func (s *GrSession) Where(field string, value any) *GrSession {
 }
 
 /**
+ * Like
+ * @Author：Jack-Z
+ * @Description: like模糊查询——like '%a%'
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Like(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" like ? ")
+	s.whereValues = append(s.whereValues, "%"+value.(string)+"%")
+	return s
+}
+
+/**
+ * LikeLeft
+ * @Author：Jack-Z
+ * @Description: like模糊查询——like '%a'
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) LikeLeft(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" like ? ")
+	s.whereValues = append(s.whereValues, "%"+value.(string))
+	return s
+}
+
+/**
+ * LikeRight
+ * @Author：Jack-Z
+ * @Description: like模糊查询——like 'a%'
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) LikeRight(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" like ? ")
+	s.whereValues = append(s.whereValues, value.(string)+"%")
+	return s
+}
+
+/**
+ * Group
+ * @Author：Jack-Z
+ * @Description: group by分组——group by a
+ * @receiver s
+ * @param field
+ * @return *GrSession
+ */
+func (s *GrSession) Group(field ...string) *GrSession {
+	s.whereParam.WriteString(" group by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	return s
+}
+
+/**
+ * OrderAsc
+ * @Author：Jack-Z
+ * @Description: order排序——order a asc
+ * @receiver s
+ * @param field
+ * @return *GrSession
+ */
+func (s *GrSession) OrderAsc(field ...string) *GrSession {
+	s.whereParam.WriteString(" order by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	s.whereParam.WriteString(" asc ")
+	return s
+}
+
+/**
+ * OrderDesc
+ * @Author：Jack-Z
+ * @Description: order排序——order a,b desc
+ * @receiver s
+ * @param field
+ * @return *GrSession
+ */
+func (s *GrSession) OrderDesc(field ...string) *GrSession {
+	s.whereParam.WriteString(" order by ")
+	s.whereParam.WriteString(strings.Join(field, ","))
+	s.whereParam.WriteString(" desc ")
+	return s
+}
+
+/**
+ * Order
+ * @Author：Jack-Z
+ * @Description: order排序——order by a desc, b asc
+ * @receiver s
+ * @param fields
+ * @return *GrSession
+ */
+func (s *GrSession) Order(fields ...string) *GrSession {
+	size := len(fields)
+	if size%2 != 0 {
+		panic("order field must be even numbers")
+	}
+	s.whereParam.WriteString(" order by ")
+	for i, v := range fields {
+		s.whereParam.WriteString(v + " ")
+		if i%2 != 0 && i < size-1 {
+			s.whereParam.WriteString(",")
+		}
+	}
+	return s
+}
+
+// todo: 其他查询条件between、大于、小于
+
+/**
+ * Between
+ * @Author：Jack-Z
+ * @Description: where a between xx and xx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Between(field string, value ...any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" between ? and ?")
+	s.whereValues = append(s.whereValues, value...)
+	return s
+}
+
+/**
+ * Gt
+ * @Author：Jack-Z
+ * @Description: 大于（greater than）where a > xx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Gt(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" > ? ")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
+ * Lt
+ * @Author：Jack-Z
+ * @Description: 小于（greater than）where a < xx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Lt(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" < ? ")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
  * And
  * @Author：Jack-Z
  * @Description: where 字段=值 and 字段1=值1 条件处理
