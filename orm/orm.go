@@ -398,6 +398,24 @@ func (s *GrSession) Where(field string, value any) *GrSession {
 }
 
 /**
+ * WhereMultiple
+ * @Author：Jack-Z
+ * @Description: where高级查询——兼容多种条件（比较、逻辑、模糊、范围等）
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) WhereMultiple(field string, value ...any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereValues = append(s.whereValues, value...)
+	return s
+}
+
+/**
  * Like
  * @Author：Jack-Z
  * @Description: like模糊查询——like '%a%'
@@ -521,7 +539,7 @@ func (s *GrSession) Order(fields ...string) *GrSession {
 	return s
 }
 
-// todo: 其他查询条件between、大于、小于
+// todo: 其他查询条件 between、大于、小于
 
 /**
  * Between
@@ -562,6 +580,25 @@ func (s *GrSession) Gt(field string, value any) *GrSession {
 }
 
 /**
+ * Ge
+ * @Author：Jack-Z
+ * @Description: 大于等于（Great and Equal）where a >= xx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Ge(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" >= ? ")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
  * Lt
  * @Author：Jack-Z
  * @Description: 小于（greater than）where a < xx
@@ -577,6 +614,140 @@ func (s *GrSession) Lt(field string, value any) *GrSession {
 	s.whereParam.WriteString(field)
 	s.whereParam.WriteString(" < ? ")
 	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
+ * Le
+ * @Author：Jack-Z
+ * @Description: 小于等于（Less than or equal）where a <= xx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Le(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" <= ? ")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
+ * Le
+ * @Author：Jack-Z
+ * @Description: NE(Not Equal to)不等于——where a <> xxx
+ * @receiver s
+ * @param field
+ * @param value
+ * @return *GrSession
+ */
+func (s *GrSession) Ne(field string, value any) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" <> ? ")
+	s.whereValues = append(s.whereValues, value)
+	return s
+}
+
+/**
+ * In
+ * @Author：Jack-Z
+ * @Description: where a in (1,2,3)
+ * @receiver s
+ * @param field
+ * @param values
+ * @return *GrSession
+ */
+func (s *GrSession) In(field string, values ...any) *GrSession {
+	size := len(values)
+	if size <= 0 {
+		panic("parameter numbers must be greater than 0")
+	}
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" in ( ")
+
+	for i := 0; i < size; i++ {
+		s.whereParam.WriteString("?")
+		if i < size-1 {
+			s.whereParam.WriteString(", ")
+		}
+	}
+	s.whereParam.WriteString(" ) ")
+	s.whereValues = append(s.whereValues, values...)
+	return s
+}
+
+/**
+ * NotIn
+ * @Author：Jack-Z
+ * @Description: where a not in (1,2,3)
+ * @receiver s
+ * @param field
+ * @param values
+ * @return *GrSession
+ */
+func (s *GrSession) NotIn(field string, values ...any) *GrSession {
+	size := len(values)
+	if size <= 0 {
+		panic("parameter numbers must be greater than 0")
+	}
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" not in ( ")
+
+	for i := 0; i < size; i++ {
+		s.whereParam.WriteString("?")
+		if i < size-1 {
+			s.whereParam.WriteString(", ")
+		}
+	}
+	s.whereParam.WriteString(" ) ")
+	s.whereValues = append(s.whereValues, values...)
+	return s
+}
+
+/**
+ * IsNull
+ * @Author：Jack-Z
+ * @Description: where a is null
+ * @receiver s
+ * @param field
+ * @return *GrSession
+ */
+func (s *GrSession) IsNull(field string) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" is null ")
+	return s
+}
+
+/**
+ * IsNotNull
+ * @Author：Jack-Z
+ * @Description: where a is not null
+ * @receiver s
+ * @param field
+ * @return *GrSession
+ */
+func (s *GrSession) IsNotNull(field string) *GrSession {
+	if s.whereParam.String() == "" {
+		s.whereParam.WriteString(" where ")
+	}
+	s.whereParam.WriteString(field)
+	s.whereParam.WriteString(" is not null ")
 	return s
 }
 
