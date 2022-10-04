@@ -752,6 +752,60 @@ func (s *GrSession) IsNotNull(field string) *GrSession {
 }
 
 /**
+ * Count
+ * @Author：Jack-Z
+ * @Description: 聚合函数——count
+ * @receiver s
+ * @param fields
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) Count(fields ...string) (int64, error) {
+	if len(fields) == 0 {
+		return s.Aggregate("count", "*")
+	}
+	return s.Aggregate("count", fields[0])
+}
+
+/**
+ * Aggregate
+ * @Author：Jack-Z
+ * @Description: 聚合函数公共方法
+ * @receiver s
+ * @param funcName  方法名
+ * @param field   字段名
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) Aggregate(funcName, field string) (int64, error) {
+	var aggSb strings.Builder
+	aggSb.WriteString(funcName)
+	aggSb.WriteString("(")
+	aggSb.WriteString(field)
+	aggSb.WriteString(")")
+	query := fmt.Sprintf("select %s from %s ", aggSb.String(), s.tableName)
+	var sb strings.Builder
+	sb.WriteString(query)
+	sb.WriteString(s.whereParam.String())
+	s.db.logger.Info(sb.String())
+
+	prepare, err := s.db.db.Prepare(sb.String())
+	if err != nil {
+		return 0, err
+	}
+	row := prepare.QueryRow(s.whereValues...)
+	if row.Err() != nil {
+		return 0, err
+	}
+	var c int64
+	err = row.Scan(&c)
+	if err != nil {
+		return 0, err
+	}
+	return c, nil
+}
+
+/**
  * And
  * @Author：Jack-Z
  * @Description: where 字段=值 and 字段1=值1 条件处理
@@ -773,6 +827,99 @@ func (s *GrSession) And() *GrSession {
 func (s *GrSession) Or() *GrSession {
 	s.whereParam.WriteString(" or ")
 	return s
+}
+
+/**
+ * Exec
+ * @Author：Jack-Z
+ * @Description: 原生sql——insert/update/delete
+ * @receiver s
+ * @param sql
+ * @param values
+ * @return int64
+ * @return error
+ */
+func (s *GrSession) Exec(sql string, values ...any) (int64, error) {
+	prepare, err := s.db.db.Prepare(sql)
+	if err != nil {
+		return 0, err
+	}
+	exec, err := prepare.Exec(values)
+	if err != nil {
+		return 0, err
+	}
+	if strings.Contains(strings.ToLower(sql), "insert") {
+		return exec.LastInsertId()
+	}
+	return exec.RowsAffected()
+}
+
+/**
+ * QueryRow
+ * @Author：Jack-Z
+ * @Description: 原生sql——select
+ * @receiver s
+ * @param sql
+ * @param data
+ * @param queryValues
+ * @return error
+ */
+func (s *GrSession) QueryRow(sql string, data any, queryValues ...any) error {
+	t := reflect.TypeOf(data)
+	if t.Kind() != reflect.Pointer {
+		return errors.New("data must be a pointer")
+	}
+	stmt, err := s.db.db.Prepare(sql)
+	if err != nil {
+		return err
+	}
+	rows, err := stmt.Query(queryValues...)
+	if err != nil {
+		return err
+	}
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	values := make([]any, len(columns))
+	fieldsScan := make([]any, len(columns))
+	for i := range fieldsScan {
+		fieldsScan[i] = &values[i]
+	}
+
+	if rows.Next() {
+		err := rows.Scan(fieldsScan...)
+		if err != nil {
+			return err
+		}
+		tVar := t.Elem()
+		vVar := reflect.ValueOf(data).Elem()
+		for i := 0; i < tVar.NumField(); i++ {
+			name := tVar.Field(i).Name
+			tag := tVar.Field(i).Tag
+			sqlTag := tag.Get("grorm")
+			if sqlTag == "" {
+				sqlTag = strings.ToLower(Name(name))
+			} else {
+				if strings.Contains(sqlTag, ",") {
+					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
+				}
+			}
+
+			for j, colName := range columns {
+				if sqlTag == colName {
+					target := values[j]
+					targetVal := reflect.ValueOf(target)
+					fieldType := tVar.Field(i).Type
+					// 	类型转换
+					result := reflect.ValueOf(targetVal.Interface()).Convert(fieldType)
+					vVar.Field(i).Set(result)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 /**
