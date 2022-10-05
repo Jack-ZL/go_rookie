@@ -18,6 +18,8 @@ type GrDb struct {
 
 type GrSession struct {
 	db          *GrDb
+	tx          *sql.Tx
+	beginTx     bool
 	tableName   string
 	fieldName   []string
 	placeHolder []string
@@ -135,7 +137,13 @@ func (s *GrSession) Insert(data any) (int64, int64, error) {
 		strings.Join(s.placeHolder, ","),
 	)
 	s.db.logger.Info(query)
-	sp, err := s.db.db.Prepare(query)
+	var err error
+	var sp *sql.Stmt
+	if s.beginTx {
+		sp, err = s.tx.Prepare(query)
+	} else {
+		sp, err = s.db.db.Prepare(query)
+	}
 	if err != nil {
 		return -1, -1, err
 	}
@@ -187,9 +195,16 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
 		}
 	}
 	s.batchValues(data)
-
 	s.db.logger.Info(sb.String())
-	sp, err := s.db.db.Prepare(sb.String())
+
+	var err error
+	var sp *sql.Stmt
+	if s.beginTx {
+		sp, err = s.tx.Prepare(query)
+	} else {
+		sp, err = s.db.db.Prepare(query)
+	}
+
 	if err != nil {
 		return -1, -1, err
 	}
@@ -232,7 +247,14 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 		sb.WriteString(s.whereParam.String())
 		s.db.logger.Info(sb.String())
 
-		sp, err := s.db.db.Prepare(sb.String())
+		var err error
+		var sp *sql.Stmt
+		if s.beginTx {
+			sp, err = s.tx.Prepare(query)
+		} else {
+			sp, err = s.db.db.Prepare(query)
+		}
+
 		if err != nil {
 			return -1, -1, err
 		}
@@ -308,8 +330,13 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 	sb.WriteString(query)
 	sb.WriteString(s.whereParam.String())
 	s.db.logger.Info(sb.String())
-
-	sp, err := s.db.db.Prepare(sb.String())
+	var err error
+	var sp *sql.Stmt
+	if s.beginTx {
+		sp, err = s.tx.Prepare(query)
+	} else {
+		sp, err = s.db.db.Prepare(query)
+	}
 	if err != nil {
 		return -1, -1, err
 	}
@@ -839,8 +866,15 @@ func (s *GrSession) Or() *GrSession {
  * @return int64
  * @return error
  */
-func (s *GrSession) Exec(sql string, values ...any) (int64, error) {
-	prepare, err := s.db.db.Prepare(sql)
+func (s *GrSession) Exec(query string, values ...any) (int64, error) {
+	var err error
+	var prepare *sql.Stmt
+	if s.beginTx {
+		prepare, err = s.tx.Prepare(query)
+	} else {
+		prepare, err = s.db.db.Prepare(query)
+	}
+
 	if err != nil {
 		return 0, err
 	}
@@ -848,7 +882,7 @@ func (s *GrSession) Exec(sql string, values ...any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if strings.Contains(strings.ToLower(sql), "insert") {
+	if strings.Contains(strings.ToLower(query), "insert") {
 		return exec.LastInsertId()
 	}
 	return exec.RowsAffected()
@@ -919,6 +953,55 @@ func (s *GrSession) QueryRow(sql string, data any, queryValues ...any) error {
 			}
 		}
 	}
+	return nil
+}
+
+/**
+ * Begin
+ * @Author：Jack-Z
+ * @Description: 事务开启
+ * @receiver s
+ * @return error
+ */
+func (s *GrSession) Begin() error {
+	begin, err := s.db.db.Begin()
+	if err != nil {
+		return err
+	}
+	s.tx = begin
+	s.beginTx = true
+	return nil
+}
+
+/**
+ * Commit
+ * @Author：Jack-Z
+ * @Description: 事务提交
+ * @receiver s
+ * @return error
+ */
+func (s *GrSession) Commit() error {
+	err := s.tx.Commit()
+	if err != nil {
+		return err
+	}
+	s.beginTx = false
+	return nil
+}
+
+/**
+ * Rollback
+ * @Author：Jack-Z
+ * @Description: 事务回滚
+ * @receiver s
+ * @return error
+ */
+func (s *GrSession) Rollback() error {
+	err := s.tx.Rollback()
+	if err != nil {
+		return err
+	}
+	s.beginTx = false
 	return nil
 }
 
@@ -1236,8 +1319,13 @@ func (s *GrSession) Delete() (int64, error) {
 	sb.WriteString(query)
 	sb.WriteString(s.whereParam.String())
 	s.db.logger.Info(sb.String())
-
-	prepare, err := s.db.db.Prepare(sb.String())
+	var err error
+	var prepare *sql.Stmt
+	if s.beginTx {
+		prepare, err = s.tx.Prepare(query)
+	} else {
+		prepare, err = s.db.db.Prepare(query)
+	}
 	if err != nil {
 		return 0, err
 	}
