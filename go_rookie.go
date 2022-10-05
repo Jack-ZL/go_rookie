@@ -284,9 +284,9 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
  * @Description: 启动并建监听一个端口
  * @receiver e
  */
-func (e *Engine) Run() {
+func (e *Engine) Run(addr string) {
 	http.Handle("/", e)
-	err := http.ListenAndServe(":8800", nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
