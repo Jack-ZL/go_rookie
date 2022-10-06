@@ -9,12 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 )
 
 type GrHttpClient struct {
-	client http.Client
+	client     http.Client
+	serviceMap map[string]GrService // 服务集合
 }
 
 /**
@@ -34,7 +36,10 @@ func NewHttpClient() *GrHttpClient {
 			ExpectContinueTimeout: 1 * time.Second,
 		},
 	}
-	return &GrHttpClient{client: client}
+	return &GrHttpClient{
+		client:     client,
+		serviceMap: make(map[string]GrService),
+	}
 }
 
 /**
@@ -217,6 +222,132 @@ func (c *GrHttpClient) toValues(args map[string]any) string {
 			params.Set(k, fmt.Sprintf("%v", v))
 		}
 		return params.Encode()
+	}
+	return ""
+}
+
+/**
+ * HttpConfig
+ *  @Description: 配置项
+ */
+type HttpConfig struct {
+	Protocol string // 协议类型
+	Host     string // 域名
+	Port     int    // 端口号
+}
+
+// 不同的协议和方法常量
+const (
+	HTTP     = "http"
+	HTTPS    = "https"
+	GET      = "GET"
+	POSTFORM = "POST_FORM"
+	POSTJSON = "POST_JSON"
+)
+
+/**
+ * GrService
+ * @Description: 配置项读取
+ */
+type GrService interface {
+	Env() HttpConfig
+}
+
+/**
+ * RegisterHttpService
+ * @Author：Jack-Z
+ * @Description: 注册服务
+ * @receiver c
+ * @param name 服务名称
+ * @param service 提供者
+ */
+func (c *GrHttpClient) RegisterHttpService(name string, service GrService) {
+	c.serviceMap[name] = service
+}
+
+/**
+ * Do
+ * @Author：Jack-Z
+ * @Description: 服务执行
+ * @receiver c
+ * @param service 服务名称
+ * @param method  方法
+ * @return GrService
+ */
+func (c *GrHttpClient) Do(service string, method string) GrService {
+	grService, ok := c.serviceMap[service]
+	if !ok {
+		panic(errors.New("service not found"))
+	}
+
+	t := reflect.TypeOf(grService)
+	v := reflect.ValueOf(grService)
+	if t.Kind() != reflect.Pointer {
+		panic(errors.New("service type not pointer"))
+	}
+	tVar := t.Elem()
+	vVar := v.Elem()
+	fieldIndex := -1
+	for i := 0; i < tVar.NumField(); i++ {
+		name := tVar.Field(i).Name
+		if name == method {
+			fieldIndex = i
+			break
+		}
+	}
+
+	if fieldIndex == -1 {
+		panic(errors.New("method not found"))
+	}
+	tag := tVar.Field(fieldIndex).Tag
+	rpcInfo := tag.Get("grpc")
+	if rpcInfo == "" {
+		panic(errors.New("not rpc tag "))
+	}
+	split := strings.Split(rpcInfo, ",")
+	if len(split) != 2 {
+		panic(errors.New("tag grpc not valid"))
+	}
+	methodType := split[0]
+	path := split[1]
+	httpConfig := grService.Env()
+	f := func(args map[string]any) ([]byte, error) {
+		if methodType == GET {
+			return c.Get(httpConfig.Prefix()+path, args)
+		}
+
+		if methodType == POSTFORM {
+			return c.PostForm(httpConfig.Prefix()+path, args)
+		}
+
+		if methodType == POSTJSON {
+			return c.PostJson(httpConfig.Prefix()+path, args)
+		}
+
+		return nil, errors.New("no match method type")
+	}
+	fValue := reflect.ValueOf(f)
+	vVar.Field(fieldIndex).Set(fValue)
+	return grService
+}
+
+/**
+ * Prefix
+ * @Author：Jack-Z
+ * @Description: 请求的地址前缀
+ * @receiver h
+ * @return string
+ */
+func (h HttpConfig) Prefix() string {
+	if h.Protocol == "" {
+		h.Protocol = HTTP
+	}
+	switch h.Protocol {
+	case HTTP:
+		return fmt.Sprintf("http://%s:%d", h.Host, h.Port)
+
+	case HTTPS:
+		return fmt.Sprintf("https://%s:%d", h.Host, h.Port)
 	}
 	return ""
 }
