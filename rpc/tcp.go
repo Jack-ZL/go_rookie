@@ -3,13 +3,22 @@ package rpc
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/Jack-ZL/go_rookie/register"
+	"golang.org/x/time/rate"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"io"
 	"log"
 	"net"
 	"reflect"
+	"sync/atomic"
+	"time"
 )
 
 /**
@@ -27,7 +36,7 @@ import (
 
 type Serializer interface {
 	Serialize(data any) ([]byte, error)
-	Deserialize(data []byte, target any) error
+	DeSerialize(data []byte, target any) error
 }
 
 // Gob协议
@@ -60,16 +69,31 @@ func (c GobSerializer) Serialize(data any) ([]byte, error) {
  * @param target
  * @return error
  */
-func (c GobSerializer) Deserialize(data []byte, target any) error {
+func (c GobSerializer) DeSerialize(data []byte, target any) error {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 	return decoder.Decode(target)
 }
 
-type SerializeType byte
+type ProtobufSerializer struct{}
+
+func (c ProtobufSerializer) Serialize(data any) ([]byte, error) {
+	marshal, err := proto.Marshal(data.(proto.Message))
+	if err != nil {
+		return nil, err
+	}
+	return marshal, nil
+}
+
+func (c ProtobufSerializer) DeSerialize(data []byte, target any) error {
+	message := target.(proto.Message)
+	return proto.Unmarshal(data, message)
+}
+
+type SerializerType byte
 
 const (
-	Gob SerializeType = iota
+	Gob SerializerType = iota
 	ProtoBuff
 )
 
@@ -79,15 +103,13 @@ type CompressInterface interface {
 	UnCompress([]byte) ([]byte, error)
 }
 
-// 解压缩类型
 type CompressType byte
 
 const (
 	Gzip CompressType = iota
 )
 
-type GzipCompress struct {
-}
+type GzipCompress struct{}
 
 /**
  * Compress
@@ -127,7 +149,7 @@ func (c GzipCompress) UnCompress(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	buf := new(bytes.Buffer)
-	// 从reader中读取数据
+	// 从 Reader 中读取出数据
 	if _, err := buf.ReadFrom(reader); err != nil {
 		return nil, err
 	}
@@ -154,29 +176,29 @@ type Header struct {
 	FullLength    int32
 	MessageType   MessageType
 	CompressType  CompressType
-	SerializeType SerializeType
+	SerializeType SerializerType
 	RequestId     int64
 }
 
-type G2RpcMessage struct {
+type GrRpcMessage struct {
 	Header *Header // 头
 	Data   any     // 消息体
 }
 
-type G2RpcRequest struct {
+type GrRpcRequest struct {
 	RequestId   int64
 	ServiceName string // 服务名
 	MethodName  string // 方法名
 	Args        []any  // 请求参数
 }
 
-type G2RpcResponse struct {
+type GrRpcResponse struct {
 	RequestId     int64
 	Code          int16
 	Msg           string
-	CompressType  CompressType  // 压缩类型
-	SerializeType SerializeType // 序列化类型
-	Data          any           // 返回的数据
+	CompressType  CompressType   // 压缩类型
+	SerializeType SerializerType // 序列化类型
+	Data          any            // 返回的数据
 }
 
 type G2RpcServer interface {
@@ -185,21 +207,31 @@ type G2RpcServer interface {
 	Stop()                                     // 暂停服务
 }
 
-type G2TcpServer struct {
-	listen     net.Listener
-	serviceMap map[string]any
+type GrTcpServer struct {
+	host           string
+	port           int
+	listen         net.Listener
+	serviceMap     map[string]any
+	RegisterType   string
+	RegisterOption register.Option
+	RegisterCli    register.GrRegister
+	LimiterTimeOut time.Duration
+	Limiter        *rate.Limiter
 }
 
-func NewTcpServer(addr string) (*G2TcpServer, error) {
-	listen, err := net.Listen("tcp", addr)
+func NewTcpServer(host string, port int) (*GrTcpServer, error) {
+	listen, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
 	}
-	m := &G2TcpServer{
-		serviceMap: make(map[string]any),
-	}
+	m := &GrTcpServer{serviceMap: make(map[string]any)}
 	m.listen = listen
+	m.port = port
+	m.host = host
 	return m, nil
+}
+func (s *GrTcpServer) SetLimiter(limit, cap int) {
+	s.Limiter = rate.NewLimiter(rate.Limit(limit), cap)
 }
 
 /**
@@ -210,17 +242,26 @@ func NewTcpServer(addr string) (*G2TcpServer, error) {
  * @param name
  * @param service
  */
-func (s *G2TcpServer) Register(name string, service interface{}) {
+func (s *GrTcpServer) Register(name string, service interface{}) {
 	t := reflect.TypeOf(service)
 	if t.Kind() != reflect.Pointer {
 		panic("service must be pointer")
 	}
 	s.serviceMap[name] = service
+
+	err := s.RegisterCli.CreateCli(s.RegisterOption)
+	if err != nil {
+		panic(err)
+	}
+	err = s.RegisterCli.RegisterService(name, s.host, s.port)
+	if err != nil {
+		panic(err)
+	}
 }
 
-type G2TcpConn struct {
+type GrTcpConn struct {
 	conn    net.Conn
-	rspChan chan *G2RpcResponse
+	rspChan chan *GrRpcResponse
 }
 
 /**
@@ -231,35 +272,63 @@ type G2TcpConn struct {
  * @param rsp
  * @return error
  */
-func (c G2TcpConn) Send(rsp *G2RpcResponse) error {
+func (c GrTcpConn) Send(rsp *GrRpcResponse) error {
 	if rsp.Code != 200 {
 		// 进行默认的数据发送
 	}
+	// 编码 发送出去
 	headers := make([]byte, 17)
-	headers[0] = MagicNumber // magic number
-	headers[1] = Version     // version
+	// magic number
+	headers[0] = MagicNumber
+	// version
+	headers[1] = Version
 	// full length
-	headers[6] = byte(msgResponse)                                 // 消息类型
-	headers[7] = byte(rsp.CompressType)                            // 压缩类型
-	headers[8] = byte(rsp.SerializeType)                           // 序列化
-	binary.BigEndian.PutUint64(headers[9:], uint64(rsp.RequestId)) // 请求id
-
-	// 	先序列化
+	// 消息类型
+	headers[6] = byte(msgResponse)
+	// 压缩类型
+	headers[7] = byte(rsp.CompressType)
+	// 序列化
+	headers[8] = byte(rsp.SerializeType)
+	// 请求id
+	binary.BigEndian.PutUint64(headers[9:], uint64(rsp.RequestId))
+	// 编码 先序列化 在压缩
 	se := loadSerializer(rsp.SerializeType)
-	body, err := se.Serialize(rsp.Data)
+	var body []byte
+	var err error
+	if rsp.SerializeType == ProtoBuff {
+		pRsp := &Response{}
+		pRsp.SerializeType = int32(rsp.SerializeType)
+		pRsp.CompressType = int32(rsp.CompressType)
+		pRsp.Code = int32(rsp.Code)
+		pRsp.Msg = rsp.Msg
+		pRsp.RequestId = rsp.RequestId
+		// value, err := structpb.
+		//	log.Println(err)
+		m := make(map[string]any)
+		marshal, _ := json.Marshal(rsp.Data)
+		_ = json.Unmarshal(marshal, &m)
+		value, err := structpb.NewStruct(m)
+		log.Println(err)
+		pRsp.Data = structpb.NewStructValue(value)
+		body, err = se.Serialize(pRsp)
+	} else {
+		body, err = se.Serialize(rsp)
+	}
 	if err != nil {
 		return err
 	}
-	com := loadCompression(rsp.CompressType)
+	com := loadCompress(rsp.CompressType)
 	body, err = com.Compress(body)
 	if err != nil {
 		return err
 	}
+	fullLen := 17 + len(body)
+	binary.BigEndian.PutUint32(headers[2:6], uint32(fullLen))
+
 	_, err = c.conn.Write(headers[:])
 	if err != nil {
 		return err
 	}
-
 	_, err = c.conn.Write(body[:])
 	if err != nil {
 		return err
@@ -268,35 +337,12 @@ func (c G2TcpConn) Send(rsp *G2RpcResponse) error {
 }
 
 /**
- * Run
- * @Author：Jack-Z
- * @Description: 运行服务
- * @receiver s
- */
-func (s *G2TcpServer) Run() {
-	for {
-		conn, err := s.listen.Accept()
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		g2Conn := &G2TcpConn{
-			conn:    conn,
-			rspChan: make(chan *G2RpcResponse, 1),
-		}
-		// 一直接收数据
-		go s.readHandler(g2Conn)
-		go s.writeHandler(g2Conn)
-	}
-}
-
-/**
  * Stop
  * @Author：Jack-Z
  * @Description: 终止服务
  * @receiver s
  */
-func (s *G2TcpServer) Stop() {
+func (s *GrTcpServer) Stop() {
 	err := s.listen.Close()
 	if err != nil {
 		log.Println(err)
@@ -304,71 +350,147 @@ func (s *G2TcpServer) Stop() {
 }
 
 /**
- * readHandler
+ * Run
  * @Author：Jack-Z
- * @Description: 接收并读取数据
+ * @Description: 运行服务
  * @receiver s
- * @param conn
  */
-func (s *G2TcpServer) readHandler(conn *G2TcpConn) {
+func (s *GrTcpServer) Run() {
+	for {
+		conn, err := s.listen.Accept()
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		msConn := &GrTcpConn{conn: conn, rspChan: make(chan *GrRpcResponse, 1)}
+		// 1. 一直接收数据 解码工作 请求业务获取结果 发送到rspChan
+		// 2. 获得结果 编码 发送数据
+		go s.readHandle(msConn)
+		go s.writeHandle(msConn)
+	}
+}
+
+func (s *GrTcpServer) readHandle(conn *GrTcpConn) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("readHandle recover ", err)
+			conn.conn.Close()
+		}
+	}()
+	// 在这加一个限流
+	ctx, cancel := context.WithTimeout(context.Background(), s.LimiterTimeOut)
+	defer cancel()
+	err2 := s.Limiter.WaitN(ctx, 1)
+	if err2 != nil {
+		rsp := &GrRpcResponse{}
+		rsp.Code = 700 // 被限流的错误
+		rsp.Msg = err2.Error()
+		conn.rspChan <- rsp
+		return
+	}
+	// 接收数据
 	// 解码
-	msg, err := s.decodeFrame(conn)
+	msg, err := decodeFrame(conn.conn)
 	if err != nil {
-		rsp := &G2RpcResponse{}
+		rsp := &GrRpcResponse{}
 		rsp.Code = 500
 		rsp.Msg = err.Error()
 		conn.rspChan <- rsp
 		return
 	}
-
 	if msg.Header.MessageType == msgRequest {
-		req := msg.Data.(*G2RpcRequest)
-		rsp := &G2RpcResponse{RequestId: req.RequestId}
-		rsp.SerializeType = msg.Header.SerializeType
-		rsp.CompressType = msg.Header.CompressType
+		if msg.Header.SerializeType == ProtoBuff {
+			req := msg.Data.(*Request)
+			rsp := &GrRpcResponse{RequestId: req.RequestId}
+			rsp.SerializeType = msg.Header.SerializeType
+			rsp.CompressType = msg.Header.CompressType
+			serviceName := req.ServiceName
+			service, ok := s.serviceMap[serviceName]
+			if !ok {
+				rsp := &GrRpcResponse{}
+				rsp.Code = 500
+				rsp.Msg = errors.New("no service found").Error()
+				conn.rspChan <- rsp
+				return
+			}
+			methodName := req.MethodName
+			method := reflect.ValueOf(service).MethodByName(methodName)
+			if method.IsNil() {
+				rsp := &GrRpcResponse{}
+				rsp.Code = 500
+				rsp.Msg = errors.New("no service method found").Error()
+				conn.rspChan <- rsp
+				return
+			}
+			// 调用方法
+			args := make([]reflect.Value, len(req.Args))
+			for i := range req.Args {
+				of := reflect.ValueOf(req.Args[i].AsInterface())
+				of = of.Convert(method.Type().In(i))
+				args[i] = of
+			}
+			result := method.Call(args)
 
-		serviceName := req.ServiceName
-		service, ok := s.serviceMap[serviceName]
-		if !ok {
-			rsp := &G2RpcResponse{}
-			rsp.Code = 500
-			rsp.Msg = errors.New("no service found").Error()
+			results := make([]any, len(result))
+			for i, v := range result {
+				results[i] = v.Interface()
+			}
+			err, ok := results[len(result)-1].(error)
+			if ok {
+				rsp.Code = 500
+				rsp.Msg = err.Error()
+				conn.rspChan <- rsp
+				return
+			}
+			rsp.Code = 200
+			rsp.Data = results[0]
 			conn.rspChan <- rsp
-			return
-		}
+		} else {
+			req := msg.Data.(*GrRpcRequest)
+			rsp := &GrRpcResponse{RequestId: req.RequestId}
+			rsp.SerializeType = msg.Header.SerializeType
+			rsp.CompressType = msg.Header.CompressType
+			serviceName := req.ServiceName
+			service, ok := s.serviceMap[serviceName]
+			if !ok {
+				rsp := &GrRpcResponse{}
+				rsp.Code = 500
+				rsp.Msg = errors.New("no service found").Error()
+				conn.rspChan <- rsp
+				return
+			}
+			methodName := req.MethodName
+			method := reflect.ValueOf(service).MethodByName(methodName)
+			if method.IsNil() {
+				rsp := &GrRpcResponse{}
+				rsp.Code = 500
+				rsp.Msg = errors.New("no service method found").Error()
+				conn.rspChan <- rsp
+				return
+			}
+			// 调用方法
+			args := req.Args
+			var valuesArg []reflect.Value
+			for _, v := range args {
+				valuesArg = append(valuesArg, reflect.ValueOf(v))
+			}
+			result := method.Call(valuesArg)
 
-		methodName := req.MethodName
-		method := reflect.ValueOf(service).MethodByName(methodName)
-		if method.IsNil() {
-			rsp := &G2RpcResponse{}
-			rsp.Code = 500
-			rsp.Msg = errors.New("no service method found").Error()
+			results := make([]any, len(result))
+			for i, v := range result {
+				results[i] = v.Interface()
+			}
+			err, ok := results[len(result)-1].(error)
+			if ok {
+				rsp.Code = 500
+				rsp.Msg = err.Error()
+				conn.rspChan <- rsp
+				return
+			}
+			rsp.Code = 200
+			rsp.Data = results[0]
 			conn.rspChan <- rsp
-			return
 		}
-		// 调用方法
-		args := req.Args
-		var valuesArg []reflect.Value
-		for _, v := range args {
-			valuesArg = append(valuesArg, reflect.ValueOf(v))
-		}
-
-		result := method.Call(valuesArg)
-		results := make([]any, len(result))
-		for i, v := range result {
-			results[i] = v.Interface()
-		}
-
-		err, ok := results[len(result)-1].(error)
-		if ok {
-			rsp.Code = 500
-			rsp.Msg = err.Error()
-			conn.rspChan <- rsp
-			return
-		}
-		rsp.Code = 200
-		rsp.Data = results[0]
-		conn.rspChan <- rsp
 	}
 }
 
@@ -379,7 +501,7 @@ func (s *G2TcpServer) readHandler(conn *G2TcpConn) {
  * @receiver s
  * @param conn
  */
-func (s *G2TcpServer) writeHandler(conn *G2TcpConn) {
+func (s *GrTcpServer) writeHandle(conn *GrTcpConn) {
 	select {
 	case rsp := <-conn.rspChan:
 		defer conn.conn.Close()
@@ -388,86 +510,113 @@ func (s *G2TcpServer) writeHandler(conn *G2TcpConn) {
 		if err != nil {
 			log.Println(err)
 		}
+
 	}
 }
 
-/**
- * decodeFrame
- * @Author：Jack-Z
- * @Description: 编码
- * @receiver s
- * @param conn
- * @return *G2RpcMessage
- * @return error
- */
-func (s *G2TcpServer) decodeFrame(conn *G2TcpConn) (*G2RpcMessage, error) {
-	header := make([]byte, 17)
-	_, err := io.ReadFull(conn.conn, header)
+func (s *GrTcpServer) SetRegister(registerType string, option register.Option) {
+	s.RegisterType = registerType
+	s.RegisterOption = option
+	if registerType == "nacos" {
+		s.RegisterCli = &register.GrNacosRegister{}
+	}
+	if registerType == "etcd" {
+		s.RegisterCli = &register.GrEtcdRegister{}
+	}
+}
+
+func decodeFrame(conn net.Conn) (*GrRpcMessage, error) {
+	// 1+1+4+1+1+1+8=17
+	headers := make([]byte, 17)
+	_, err := io.ReadFull(conn, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	mn := header[0]
+	mn := headers[0]
 	if mn != MagicNumber {
 		return nil, errors.New("magic number error")
 	}
+	// version
+	vs := headers[1]
+	// full length
+	// 网络传输 大端
+	fullLength := int32(binary.BigEndian.Uint32(headers[2:6]))
+	// messageType
+	messageType := headers[6]
+	// 压缩类型
+	compressType := headers[7]
+	// 序列化类型
+	seType := headers[8]
+	// 请求id
+	requestId := int64(binary.BigEndian.Uint32(headers[9:]))
 
-	vs := header[1]
-
-	fullLength := int32(binary.BigEndian.Uint32(header[2:6]))
-	msgType := header[6]                                    // 消息类型
-	cprType := header[7]                                    // 压缩类型
-	seType := header[8]                                     // 序列化类型
-	requestId := int64(binary.BigEndian.Uint32(header[9:])) // 请求id
-
-	msg := &G2RpcMessage{}
+	msg := &GrRpcMessage{
+		Header: &Header{},
+	}
 	msg.Header.MagicNumber = mn
 	msg.Header.Version = vs
 	msg.Header.FullLength = fullLength
-	msg.Header.MessageType = MessageType(msgType)
-	msg.Header.CompressType = CompressType(cprType)
-	msg.Header.SerializeType = SerializeType(seType)
+	msg.Header.MessageType = MessageType(messageType)
+	msg.Header.CompressType = CompressType(compressType)
+	msg.Header.SerializeType = SerializerType(seType)
 	msg.Header.RequestId = requestId
 
-	// 请求体
+	// body
 	bodyLen := fullLength - 17
 	body := make([]byte, bodyLen)
-	_, err = io.ReadFull(conn.conn, body)
+	_, err = io.ReadFull(conn, body)
 	if err != nil {
 		return nil, err
 	}
-	compress := loadCompression(CompressType(cprType))
+	// 编码的 先序列化 后 压缩
+	// 解码的时候 先解压缩，反序列化
+	compress := loadCompress(CompressType(compressType))
 	if compress == nil {
 		return nil, errors.New("no compress")
 	}
-
 	body, err = compress.UnCompress(body)
-	if err == nil {
+	if compress == nil {
 		return nil, err
 	}
-
-	serialize := loadSerializer(SerializeType(seType))
-	if serialize == nil {
+	serializer := loadSerializer(SerializerType(seType))
+	if serializer == nil {
 		return nil, errors.New("no serializer")
 	}
-
-	if MessageType(msgType) == msgRequest {
-		req := &G2RpcRequest{}
-		err := serialize.Deserialize(body, req)
-		if err != nil {
-			return nil, err
+	if MessageType(messageType) == msgRequest {
+		if SerializerType(seType) == ProtoBuff {
+			req := &Request{}
+			err := serializer.DeSerialize(body, req)
+			if err != nil {
+				return nil, err
+			}
+			msg.Data = req
+		} else {
+			req := &GrRpcRequest{}
+			err := serializer.DeSerialize(body, req)
+			if err != nil {
+				return nil, err
+			}
+			msg.Data = req
 		}
-		msg.Data = req
 		return msg, nil
 	}
-
-	if MessageType(msgType) == msgResponse {
-		rsp := &G2RpcResponse{}
-		err := serialize.Deserialize(body, rsp)
-		if err != nil {
-			return nil, err
+	if MessageType(messageType) == msgResponse {
+		if SerializerType(seType) == ProtoBuff {
+			rsp := &Response{}
+			err := serializer.DeSerialize(body, rsp)
+			if err != nil {
+				return nil, err
+			}
+			msg.Data = rsp
+		} else {
+			rsp := &GrRpcResponse{}
+			err := serializer.DeSerialize(body, rsp)
+			if err != nil {
+				return nil, err
+			}
+			msg.Data = rsp
 		}
-		msg.Data = rsp
+
 		return msg, nil
 	}
 	return nil, errors.New("no message type")
@@ -480,12 +629,12 @@ func (s *G2TcpServer) decodeFrame(conn *G2TcpConn) (*G2RpcMessage, error) {
  * @param serializeType
  * @return Serializer
  */
-func loadSerializer(serializeType SerializeType) Serializer {
-	switch serializeType {
+func loadSerializer(serializerType SerializerType) Serializer {
+	switch serializerType {
 	case Gob:
 		return GobSerializer{}
 	case ProtoBuff:
-		return GobSerializer{}
+		return ProtobufSerializer{}
 	}
 	return nil
 }
@@ -497,10 +646,299 @@ func loadSerializer(serializeType SerializeType) Serializer {
  * @param compressType
  * @return CompressInterface
  */
-func loadCompression(compressType CompressType) CompressInterface {
+func loadCompress(compressType CompressType) CompressInterface {
 	switch compressType {
 	case Gzip:
 		return GzipCompress{}
 	}
 	return nil
+}
+
+type GrRpcClient interface {
+	Connect() error
+	Invoke(context context.Context, serviceName string, methodName string, args []any) (any, error)
+	Close() error
+}
+
+type GrTcpClient struct {
+	conn        net.Conn
+	option      TcpClientOption
+	ServiceName string
+	RegisterCli register.GrRegister
+}
+type TcpClientOption struct {
+	Retries           int
+	ConnectionTimeout time.Duration
+	SerializeType     SerializerType
+	CompressType      CompressType
+	Host              string
+	Port              int
+	RegisterType      string
+	RegisterOption    register.Option
+	RegisterCli       register.GrRegister
+}
+
+var DefaultOption = TcpClientOption{
+	Host:              "127.0.0.1",
+	Port:              9222,
+	Retries:           3,
+	ConnectionTimeout: 5 * time.Second,
+	SerializeType:     Gob,
+	CompressType:      Gzip,
+}
+
+func NewTcpClient(option TcpClientOption) *GrTcpClient {
+	return &GrTcpClient{option: option}
+}
+
+func (c *GrTcpClient) Connect() error {
+	var addr string
+	err := c.RegisterCli.CreateCli(c.option.RegisterOption)
+	if err != nil {
+		panic(err)
+	}
+	addr, err = c.RegisterCli.GetValue(c.ServiceName)
+	if err != nil {
+		panic(err)
+	}
+	conn, err := net.DialTimeout("tcp", addr, c.option.ConnectionTimeout)
+	if err != nil {
+		return err
+	}
+	c.conn = conn
+	return nil
+}
+
+func (c *GrTcpClient) Close() error {
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
+}
+
+var reqId int64
+
+func (c *GrTcpClient) Invoke(ctx context.Context, serviceName string, methodName string, args []any) (any, error) {
+	// 包装 request对象 编码 发送即可
+	req := &GrRpcRequest{}
+	req.RequestId = atomic.AddInt64(&reqId, 1)
+	req.ServiceName = serviceName
+	req.MethodName = methodName
+	req.Args = args
+
+	headers := make([]byte, 17)
+	// magic number
+	headers[0] = MagicNumber
+	// version
+	headers[1] = Version
+	// full length
+	// 消息类型
+	headers[6] = byte(msgRequest)
+	// 压缩类型
+	headers[7] = byte(c.option.CompressType)
+	// 序列化
+	headers[8] = byte(c.option.SerializeType)
+	// 请求id
+	binary.BigEndian.PutUint64(headers[9:], uint64(req.RequestId))
+
+	serializer := loadSerializer(c.option.SerializeType)
+	if serializer == nil {
+		return nil, errors.New("no serializer")
+	}
+	var body []byte
+	var err error
+	if c.option.SerializeType == ProtoBuff {
+		pReq := &Request{}
+		pReq.RequestId = atomic.AddInt64(&reqId, 1)
+		pReq.ServiceName = serviceName
+		pReq.MethodName = methodName
+		listValue, err := structpb.NewList(args)
+		if err != nil {
+			return nil, err
+		}
+		pReq.Args = listValue.Values
+		body, err = serializer.Serialize(pReq)
+	} else {
+		body, err = serializer.Serialize(req)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	compress := loadCompress(c.option.CompressType)
+	if compress == nil {
+		return nil, errors.New("no compress")
+	}
+	body, err = compress.Compress(body)
+	if err != nil {
+		return nil, err
+	}
+	fullLen := 17 + len(body)
+	binary.BigEndian.PutUint32(headers[2:6], uint32(fullLen))
+
+	_, err = c.conn.Write(headers[:])
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = c.conn.Write(body[:])
+	if err != nil {
+		return nil, err
+	}
+	rspChan := make(chan *GrRpcResponse)
+	go c.readHandle(rspChan)
+	rsp := <-rspChan
+	return rsp, nil
+}
+
+func (c *GrTcpClient) readHandle(rspChan chan *GrRpcResponse) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("GrTcpClient readHandle recover: ", err)
+			c.conn.Close()
+		}
+	}()
+	for {
+		msg, err := decodeFrame(c.conn)
+		if err != nil {
+			log.Println("未解析出任何数据")
+			rsp := &GrRpcResponse{}
+			rsp.Code = 500
+			rsp.Msg = err.Error()
+			rspChan <- rsp
+			return
+		}
+		// 根据请求
+		if msg.Header.MessageType == msgResponse {
+			if msg.Header.SerializeType == ProtoBuff {
+				rsp := msg.Data.(*Response)
+				asInterface := rsp.Data.AsInterface()
+				marshal, _ := json.Marshal(asInterface)
+				rsp1 := &GrRpcResponse{}
+				json.Unmarshal(marshal, rsp1)
+				rspChan <- rsp1
+			} else {
+				rsp := msg.Data.(*GrRpcResponse)
+				rspChan <- rsp
+			}
+			return
+		}
+	}
+}
+
+func (c *GrTcpClient) decodeFrame(conn net.Conn) (*GrRpcMessage, error) {
+	// 1+1+4+1+1+1+8=17
+	headers := make([]byte, 17)
+	_, err := io.ReadFull(conn, headers)
+	if err != nil {
+		return nil, err
+	}
+	mn := headers[0]
+	if mn != MagicNumber {
+		return nil, errors.New("magic number error")
+	}
+	// version
+	vs := headers[1]
+	// full length
+	// 网络传输 大端
+	fullLength := int32(binary.BigEndian.Uint32(headers[2:6]))
+	// messageType
+	messageType := headers[6]
+	// 压缩类型
+	compressType := headers[7]
+	// 序列化类型
+	seType := headers[8]
+	// 请求id
+	requestId := int64(binary.BigEndian.Uint32(headers[9:]))
+
+	msg := &GrRpcMessage{
+		Header: &Header{},
+	}
+	msg.Header.MagicNumber = mn
+	msg.Header.Version = vs
+	msg.Header.FullLength = fullLength
+	msg.Header.MessageType = MessageType(messageType)
+	msg.Header.CompressType = CompressType(compressType)
+	msg.Header.SerializeType = SerializerType(seType)
+	msg.Header.RequestId = requestId
+
+	// body
+	bodyLen := fullLength - 17
+	body := make([]byte, bodyLen)
+	_, err = io.ReadFull(conn, body)
+	if err != nil {
+		return nil, err
+	}
+	// 编码的 先序列化 后 压缩
+	// 解码的时候 先解压缩，反序列化
+	compress := loadCompress(CompressType(compressType))
+	if compress == nil {
+		return nil, errors.New("no compress")
+	}
+	body, err = compress.UnCompress(body)
+	if compress == nil {
+		return nil, err
+	}
+	serializer := loadSerializer(SerializerType(seType))
+	if serializer == nil {
+		return nil, errors.New("no serializer")
+	}
+	if MessageType(messageType) == msgRequest {
+		req := &GrRpcRequest{}
+		err := serializer.DeSerialize(body, req)
+		if err != nil {
+			return nil, err
+		}
+		msg.Data = req
+		return msg, nil
+	}
+	if MessageType(messageType) == msgResponse {
+		rsp := &GrRpcResponse{}
+		err := serializer.DeSerialize(body, rsp)
+		if err != nil {
+			return nil, err
+		}
+		msg.Data = rsp
+		return msg, nil
+	}
+	return nil, errors.New("no message type")
+}
+
+type GrTcpClientProxy struct {
+	client *GrTcpClient
+	option TcpClientOption
+}
+
+func NewGrTcpClientProxy(option TcpClientOption) *GrTcpClientProxy {
+	return &GrTcpClientProxy{option: option}
+}
+func (p *GrTcpClientProxy) Call(ctx context.Context, serviceName string, methodName string, args []any) (any, error) {
+	client := NewTcpClient(p.option)
+	client.ServiceName = serviceName
+	if p.option.RegisterType == "nacos" {
+		client.RegisterCli = &register.GrNacosRegister{}
+	}
+	if p.option.RegisterType == "etcd" {
+		client.RegisterCli = &register.GrEtcdRegister{}
+	}
+	p.client = client
+	err := client.Connect()
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < p.option.Retries; i++ {
+		result, err := client.Invoke(ctx, serviceName, methodName, args)
+		if err != nil {
+			if i >= p.option.Retries-1 {
+				log.Println(errors.New("already retry all time"))
+				client.Close()
+				return nil, err
+			}
+			// 睡眠一小会
+			continue
+		}
+		client.Close()
+		return result, nil
+	}
+	return nil, errors.New("retry time is 0")
 }
