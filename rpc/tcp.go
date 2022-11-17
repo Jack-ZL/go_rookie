@@ -34,18 +34,51 @@ import (
 3、将响应数据发送给客户端（编码）
 */
 
+/**
+ * Serializer
+ * @Description: 序列化接口定义
+ */
 type Serializer interface {
 	Serialize(data any) ([]byte, error)
 	DeSerialize(data []byte, target any) error
 }
 
+/**
+ * CompressInterface
+ * @Description: 解压缩接口
+ */
+type CompressInterface interface {
+	Compress([]byte) ([]byte, error)
+	UnCompress([]byte) ([]byte, error)
+}
+
+type SerializerType byte
+type CompressType byte
+
+const (
+	Gzip CompressType = iota
+)
+
+const (
+	Gob SerializerType = iota
+	ProtoBuff
+)
+const (
+	MagicNumber byte = 0x1d // 魔法数
+	Version          = 0x01 // 版本
+)
+
+type MessageType byte
+
 // Gob协议
 type GobSerializer struct{}
+type ProtobufSerializer struct{}
+type GzipCompress struct{}
 
 /**
  * Serialize
  * @Author：Jack-Z
- * @Description: 序列化
+ * @Description: Gob协议-序列化
  * @receiver c
  * @param data
  * @return []byte
@@ -63,7 +96,7 @@ func (c GobSerializer) Serialize(data any) ([]byte, error) {
 /**
  * Deserialize
  * @Author：Jack-Z
- * @Description: 反序列化
+ * @Description: Gob协议-反序列化
  * @receiver c
  * @param data
  * @param target
@@ -75,8 +108,15 @@ func (c GobSerializer) DeSerialize(data []byte, target any) error {
 	return decoder.Decode(target)
 }
 
-type ProtobufSerializer struct{}
-
+/**
+ * Serialize
+ * @Author：Jack-Z
+ * @Description:ProtoBuff协议-序列化
+ * @receiver c
+ * @param data
+ * @return []byte
+ * @return error
+ */
 func (c ProtobufSerializer) Serialize(data any) ([]byte, error) {
 	marshal, err := proto.Marshal(data.(proto.Message))
 	if err != nil {
@@ -85,31 +125,19 @@ func (c ProtobufSerializer) Serialize(data any) ([]byte, error) {
 	return marshal, nil
 }
 
+/**
+ * DeSerialize
+ * @Author：Jack-Z
+ * @Description: ProtoBuff协议-反序列化
+ * @receiver c
+ * @param data
+ * @param target
+ * @return error
+ */
 func (c ProtobufSerializer) DeSerialize(data []byte, target any) error {
 	message := target.(proto.Message)
 	return proto.Unmarshal(data, message)
 }
-
-type SerializerType byte
-
-const (
-	Gob SerializerType = iota
-	ProtoBuff
-)
-
-// 解压缩接口
-type CompressInterface interface {
-	Compress([]byte) ([]byte, error)
-	UnCompress([]byte) ([]byte, error)
-}
-
-type CompressType byte
-
-const (
-	Gzip CompressType = iota
-)
-
-type GzipCompress struct{}
 
 /**
  * Compress
@@ -155,13 +183,6 @@ func (c GzipCompress) UnCompress(data []byte) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
-
-const (
-	MagicNumber byte = 0x1d // 魔法数
-	Version          = 0x01 // 版本
-)
-
-type MessageType byte
 
 const (
 	msgRequest MessageType = iota
@@ -912,6 +933,7 @@ type GrTcpClientProxy struct {
 func NewGrTcpClientProxy(option TcpClientOption) *GrTcpClientProxy {
 	return &GrTcpClientProxy{option: option}
 }
+
 func (p *GrTcpClientProxy) Call(ctx context.Context, serviceName string, methodName string, args []any) (any, error) {
 	client := NewTcpClient(p.option)
 	client.ServiceName = serviceName
