@@ -50,6 +50,16 @@ func (r *GrEtcdRegister) CreateCli(option Option) error {
 	return err
 }
 
+/**
+ * RegisterService
+ * @Author：Jack-Z
+ * @Description: 依据服务名称注册服务
+ * @receiver r
+ * @param serviceName
+ * @param host
+ * @param port
+ * @return error
+ */
 func (r *GrEtcdRegister) RegisterService(serviceName string, host string, port int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
