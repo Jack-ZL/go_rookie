@@ -16,8 +16,8 @@ type Option struct {
 }
 
 type GrRegister interface {
-	CreateCli(option Option) error
-	RegisterService(serviceName string, host string, port int) error
-	GetValue(serviceName string) (string, error)
-	Close() error
+	CreateCli(option Option) error                                   //创建客户端
+	RegisterService(serviceName string, host string, port int) error //通过名称注册服务
+	GetValue(serviceName string) (string, error)                     //通过服务名称获取一个实例
+	Close() error                                                    //关闭客户端
 }

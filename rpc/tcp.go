@@ -233,7 +233,7 @@ type GrTcpServer struct {
 	port           int
 	listen         net.Listener
 	serviceMap     map[string]any
-	RegisterType   string
+	RegisterType   string //注册类型：nacos或etcd
 	RegisterOption register.Option
 	RegisterCli    register.GrRegister
 	LimiterTimeOut time.Duration
@@ -251,6 +251,7 @@ func NewTcpServer(host string, port int) (*GrTcpServer, error) {
 	m.host = host
 	return m, nil
 }
+
 func (s *GrTcpServer) SetLimiter(limit, cap int) {
 	s.Limiter = rate.NewLimiter(rate.Limit(limit), cap)
 }
@@ -535,6 +536,14 @@ func (s *GrTcpServer) writeHandle(conn *GrTcpConn) {
 	}
 }
 
+/**
+ * SetRegister
+ * @Author：Jack-Z
+ * @Description: 设置注册类型和option
+ * @receiver s
+ * @param registerType
+ * @param option
+ */
 func (s *GrTcpServer) SetRegister(registerType string, option register.Option) {
 	s.RegisterType = registerType
 	s.RegisterOption = option
@@ -712,6 +721,13 @@ func NewTcpClient(option TcpClientOption) *GrTcpClient {
 	return &GrTcpClient{option: option}
 }
 
+/**
+ * Connect
+ * @Author：Jack-Z
+ * @Description: tcp客户端连接
+ * @receiver c
+ * @return error
+ */
 func (c *GrTcpClient) Connect() error {
 	var addr string
 	err := c.RegisterCli.CreateCli(c.option.RegisterOption)
@@ -812,6 +828,13 @@ func (c *GrTcpClient) Invoke(ctx context.Context, serviceName string, methodName
 	return rsp, nil
 }
 
+/**
+ * readHandle
+ * @Author：Jack-Z
+ * @Description: 客户端读取数据
+ * @receiver c
+ * @param rspChan
+ */
 func (c *GrTcpClient) readHandle(rspChan chan *GrRpcResponse) {
 	defer func() {
 		if err := recover(); err != nil {
