@@ -236,8 +236,8 @@ type GrTcpServer struct {
 	RegisterType   string //注册类型：nacos或etcd
 	RegisterOption register.Option
 	RegisterCli    register.GrRegister
-	LimiterTimeOut time.Duration
-	Limiter        *rate.Limiter
+	LimiterTimeOut time.Duration // 限流超时时间
+	Limiter        *rate.Limiter // 限流器
 }
 
 func NewTcpServer(host string, port int) (*GrTcpServer, error) {
@@ -399,6 +399,7 @@ func (s *GrTcpServer) readHandle(conn *GrTcpConn) {
 			conn.conn.Close()
 		}
 	}()
+
 	// 在这加一个限流
 	ctx, cancel := context.WithTimeout(context.Background(), s.LimiterTimeOut)
 	defer cancel()
@@ -410,6 +411,7 @@ func (s *GrTcpServer) readHandle(conn *GrTcpConn) {
 		conn.rspChan <- rsp
 		return
 	}
+
 	// 接收数据
 	// 解码
 	msg, err := decodeFrame(conn.conn)
