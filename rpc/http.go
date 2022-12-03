@@ -103,7 +103,7 @@ func (c *GrHttpClient) JsonRequest(method string, url string, args map[string]an
 	return req, nil
 }
 
-func (c *GrHttpClient) Response(req *http.Request) ([]byte, error) {
+func (c *GrHttpClientSession) Response(req *http.Request) ([]byte, error) {
 	return c.responseHandler(req)
 }
 
@@ -117,7 +117,7 @@ func (c *GrHttpClient) Response(req *http.Request) ([]byte, error) {
  * @return []byte
  * @return error
  */
-func (c *GrHttpClient) Get(url string, args map[string]any) ([]byte, error) {
+func (c *GrHttpClientSession) Get(url string, args map[string]any) ([]byte, error) {
 	if args != nil && len(args) > 0 {
 		url = url + "?" + c.toValues(args)
 	}
@@ -139,7 +139,7 @@ func (c *GrHttpClient) Get(url string, args map[string]any) ([]byte, error) {
  * @return []byte
  * @return error
  */
-func (c *GrHttpClient) PostForm(url string, args map[string]any) ([]byte, error) {
+func (c *GrHttpClientSession) PostForm(url string, args map[string]any) ([]byte, error) {
 	request, err := http.NewRequest("POST", url, strings.NewReader(c.toValues(args)))
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (c *GrHttpClient) PostForm(url string, args map[string]any) ([]byte, error)
  * @return []byte
  * @return error
  */
-func (c *GrHttpClient) PostJson(url string, args map[string]any) ([]byte, error) {
+func (c *GrHttpClientSession) PostJson(url string, args map[string]any) ([]byte, error) {
 	marshal, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,8 @@ func (c *GrHttpClient) PostJson(url string, args map[string]any) ([]byte, error)
  * @return []byte
  * @return error
  */
-func (c *GrHttpClient) responseHandler(request *http.Request) ([]byte, error) {
+func (c *GrHttpClientSession) responseHandler(request *http.Request) ([]byte, error) {
+	c.ReqHandler(request)
 	do, err := c.client.Do(request)
 	if err != nil {
 		return nil, err
@@ -265,6 +266,17 @@ func (c *GrHttpClient) RegisterHttpService(name string, service GrService) {
 	c.serviceMap[name] = service
 }
 
+type GrHttpClientSession struct {
+	*GrHttpClient
+	ReqHandler func(req *http.Request)
+}
+
+func (c *GrHttpClient) Session() *GrHttpClientSession {
+	return &GrHttpClientSession{
+		c, nil,
+	}
+}
+
 /**
  * Do
  * @Author：Jack-Z
@@ -274,7 +286,7 @@ func (c *GrHttpClient) RegisterHttpService(name string, service GrService) {
  * @param method  方法
  * @return GrService
  */
-func (c *GrHttpClient) Do(service string, method string) GrService {
+func (c *GrHttpClientSession) Do(service string, method string) GrService {
 	grService, ok := c.serviceMap[service]
 	if !ok {
 		panic(errors.New("service not found"))
