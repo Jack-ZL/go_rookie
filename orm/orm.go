@@ -566,8 +566,6 @@ func (s *GrSession) Order(fields ...string) *GrSession {
 	return s
 }
 
-// todo: 其他查询条件 between、大于、小于
-
 /**
  * Between
  * @Author：Jack-Z
@@ -857,7 +855,7 @@ func (s *GrSession) Or() *GrSession {
 }
 
 /**
- * Exec
+ * QueryExec
  * @Author：Jack-Z
  * @Description: 原生sql——insert/update/delete
  * @receiver s
@@ -866,7 +864,7 @@ func (s *GrSession) Or() *GrSession {
  * @return int64
  * @return error
  */
-func (s *GrSession) Exec(query string, values ...any) (int64, error) {
+func (s *GrSession) QueryExec(query string, values ...any) (int64, error) {
 	var err error
 	var prepare *sql.Stmt
 	if s.beginTx {

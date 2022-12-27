@@ -16,10 +16,16 @@ var Conf = &GrConfig{
 }
 
 type GrConfig struct {
-	logger   *grLog.Logger
-	Log      map[string]any
-	Pool     map[string]any
-	Template map[string]any
+	logger    *grLog.Logger
+	Log       map[string]any //日志保存路径配置
+	Pool      map[string]any //线程池数量配置
+	Template  map[string]any //模板文件配置
+	Mysql     map[string]any //mysql数据库配置
+	Sqlserver map[string]any //sqlserver数据库配置
+	Redis     map[string]any //redis配置
+	Mongodb   map[string]any //Mongodb配置
+	App       map[string]any //应用基本配置
+	Url       map[string]any //链接类配置
 }
 
 /**
