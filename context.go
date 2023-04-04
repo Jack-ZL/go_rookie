@@ -655,3 +655,15 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 		HttpOnly: httpOnly,
 	})
 }
+
+/**
+ * GetHeader
+ * @Author：Jack-Z
+ * @Description: 获取header中的内容
+ * @receiver c
+ * @param key
+ * @return string
+ */
+func (c *Context) GetHeader(key string) string {
+	return c.R.Header.Get(key)
+}

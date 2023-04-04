@@ -2,11 +2,16 @@ package go_rookie
 
 import (
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/config"
+	"github.com/Jack-ZL/go_rookie/gateway"
 	grLog "github.com/Jack-ZL/go_rookie/log"
+	"github.com/Jack-ZL/go_rookie/register"
 	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"sync"
 )
 
@@ -144,12 +149,19 @@ type ErrorHandler func(err error) (int, any)
 
 type Engine struct {
 	router
-	funcMap      template.FuncMap
-	HTMLRender   render.HTMLRender
-	pool         sync.Pool
-	Logger       *grLog.Logger
-	middles      []MiddlewareFunc
-	errorHandler ErrorHandler
+	funcMap          template.FuncMap
+	HTMLRender       render.HTMLRender
+	pool             sync.Pool
+	Logger           *grLog.Logger
+	middles          []MiddlewareFunc
+	errorHandler     ErrorHandler
+	OpenGateway      bool
+	gatewayConfigs   []gateway.GWConfig
+	gatewayTreeNode  *gateway.TreeNode
+	gatewayConfigMap map[string]gateway.GWConfig
+	RegisterType     string              //注册类型
+	RegisterOption   register.Option     //注册的配置项
+	RegisterCli      register.GrRegister //注册的客户端
 }
 
 /**
@@ -161,6 +173,11 @@ type Engine struct {
 func New() *Engine {
 	engine := &Engine{
 		router: router{},
+		gatewayTreeNode: &gateway.TreeNode{
+			Name:     "/",
+			Children: make([]*gateway.TreeNode, 0),
+		},
+		gatewayConfigMap: make(map[string]gateway.GWConfig),
 	}
 	engine.pool.New = func() any {
 		return engine.allocateContext()
@@ -171,6 +188,10 @@ func New() *Engine {
 func Default() *Engine {
 	engine := New()
 	engine.Logger = grLog.Default()
+	logPath, ok := config.Conf.Log["path"]
+	if ok {
+		engine.Logger.SetLogPath(logPath.(string))
+	}
 	engine.Use(Logging, Recovery)
 	engine.router.engine = engine
 	return engine
@@ -178,6 +199,15 @@ func Default() *Engine {
 
 func (e *Engine) allocateContext() any {
 	return &Context{engine: e}
+}
+
+func (e *Engine) SetGatewayConfig(configs []gateway.GWConfig) {
+	e.gatewayConfigs = configs
+	// 把这个路径存储起来，访问的时候去匹配里面的路由，匹配到就获取相应的结果
+	for _, v := range e.gatewayConfigs {
+		e.gatewayTreeNode.Put(v.Path, v.Name)
+		e.gatewayConfigMap[v.Name] = v
+	}
 }
 
 func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
@@ -194,6 +224,20 @@ func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
 func (e *Engine) LoadTemplate(pattern string) {
 	t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
 	e.SetHtmlTemplate(t)
+}
+
+/**
+ * LoadTemplateConf
+ * @Author：Jack-Z
+ * @Description: 加载模板（按配置文件指定的目录）
+ * @receiver e
+ */
+func (e *Engine) LoadTemplateConf() {
+	pattern, ok := config.Conf.Template["pattern"]
+	if ok {
+		t := template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern.(string)))
+		e.SetHtmlTemplate(t)
+	}
 }
 
 /**
@@ -227,12 +271,62 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 /**
  * httpRequestHandler
  * @Author：Jack-Z
- * @Description: 请求处理：路由匹配、参数获取等
+ * @Description: 请求处理：网关处理、路由匹配、参数获取等
  * @receiver e
  * @param w
  * @param r
  */
 func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http.Request) {
+	if e.OpenGateway {
+		path := r.URL.Path
+		node := e.gatewayTreeNode.Get(path)
+		if node == nil {
+			ctx.W.WriteHeader(http.StatusNotFound)
+			fmt.Fprintln(ctx.W, ctx.R.RequestURI+"not found")
+			return
+		}
+		gwConfig := e.gatewayConfigMap[node.GwName]
+		gwConfig.Header(ctx.R)
+		addr, err := e.RegisterCli.GetValue(gwConfig.ServiceName)
+		if err != nil {
+			ctx.W.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(ctx.W, err.Error())
+			return
+		}
+		target, err := url.Parse(fmt.Sprintf("http://%s%s", addr, path))
+		if err != nil {
+			ctx.W.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(ctx.W, err.Error())
+			return
+		}
+
+		//网关处理逻辑
+		director := func(req *http.Request) {
+			req.Host = target.Host
+			req.URL.Host = target.Host
+			req.URL.Path = target.Path
+			req.URL.Scheme = target.Scheme
+			if _, ok := req.Header["User-Agent"]; !ok {
+				req.Header.Set("User-Agent", "")
+			}
+		}
+		//TODO:相应处理
+		response := func(response *http.Response) error {
+			return nil
+		}
+		//TODO:错误处理
+		handler := func(writer http.ResponseWriter, request *http.Request, err error) {
+
+		}
+		proxy := httputil.ReverseProxy{
+			Director:       director,
+			ModifyResponse: response,
+			ErrorHandler:   handler,
+		}
+		proxy.ServeHTTP(w, r)
+		return
+	}
+
 	method := r.Method
 	for _, group := range e.routerGroup {
 		routerName := SubStringLast(r.URL.Path, "/"+group.name)
@@ -265,9 +359,26 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
  * @Description: 启动并建监听一个端口
  * @receiver e
  */
-func (e *Engine) Run() {
+func (e *Engine) Run(addr string) {
+	if e.RegisterType == "nacos" {
+		r := register.GrNacosRegister{}
+		err := r.CreateCli(e.RegisterOption)
+		if err != nil {
+			panic(err)
+		}
+		e.RegisterCli = &r
+	}
+	if e.RegisterType == "etcd" {
+		r := register.GrEtcdRegister{}
+		err := r.CreateCli(e.RegisterOption)
+		if err != nil {
+			panic(err)
+		}
+		e.RegisterCli = &r
+	}
+
 	http.Handle("/", e)
-	err := http.ListenAndServe(":8800", nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

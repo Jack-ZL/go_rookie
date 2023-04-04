@@ -2,6 +2,7 @@ package grpool
 
 import (
 	"errors"
+	"github.com/Jack-ZL/go_rookie/config"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,21 @@ type Pool struct {
  */
 func NewPool(cap int) (*Pool, error) {
 	return NewTimePool(cap, DefaultExpire)
+}
+
+/**
+ * NewPoolConf
+ * @Author：Jack-Z
+ * @Description: new的协程池（按配置文件指定的协程池数量）
+ * @return *Pool
+ * @return error
+ */
+func NewPoolConf() (*Pool, error) {
+	pcap, ok := config.Conf.Pool["cap"]
+	if !ok {
+		return nil, errors.New("cap config not exist")
+	}
+	return NewTimePool(int(pcap.(int64)), DefaultExpire)
 }
 
 func NewTimePool(c int, expire int) (*Pool, error) {
