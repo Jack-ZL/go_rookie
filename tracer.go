@@ -18,7 +18,6 @@ import (
  * @return MiddlewareFunc
  */
 func Tracer(serviceName string, samplerConfig *config.SamplerConfig, reporter *config.ReporterConfig, options ...config.Option) MiddlewareFunc {
-
 	return func(next HandlerFunc) HandlerFunc {
 		return func(ctx *Context) {
 			tracer, closer, spanContext, _ := grTracer.CreateTracerHeader(serviceName, ctx.R.Header, samplerConfig, reporter, options...)
