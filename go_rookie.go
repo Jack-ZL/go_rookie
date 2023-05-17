@@ -282,7 +282,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 		node := e.gatewayTreeNode.Get(path)
 		if node == nil {
 			ctx.W.WriteHeader(http.StatusNotFound)
-			fmt.Fprintln(ctx.W, ctx.R.RequestURI+"not found")
+			fmt.Fprintln(ctx.W, ctx.R.RequestURI+" not found")
 			return
 		}
 		gwConfig := e.gatewayConfigMap[node.GwName]
@@ -299,7 +299,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 			fmt.Fprintln(ctx.W, err.Error())
 			return
 		}
-
+		
 		//网关处理逻辑
 		director := func(req *http.Request) {
 			req.Host = target.Host
@@ -316,7 +316,8 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 		}
 		//TODO:错误处理
 		handler := func(writer http.ResponseWriter, request *http.Request, err error) {
-
+			log.Println(err)
+			log.Println("错误处理")
 		}
 		proxy := httputil.ReverseProxy{
 			Director:       director,
@@ -326,7 +327,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 		proxy.ServeHTTP(w, r)
 		return
 	}
-
+	
 	method := r.Method
 	for _, group := range e.routerGroup {
 		routerName := SubStringLast(r.URL.Path, "/"+group.name)
@@ -338,7 +339,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 				group.methodHandler(node.routerName, ANY, handle, ctx)
 				return
 			}
-
+			
 			handle, ok = group.handlerFuncMap[node.routerName][method]
 			if ok {
 				group.methodHandler(node.routerName, method, handle, ctx)
@@ -376,7 +377,7 @@ func (e *Engine) Run(addr string) {
 		}
 		e.RegisterCli = &r
 	}
-
+	
 	http.Handle("/", e)
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {

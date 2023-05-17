@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/struct.proto";
 
-option go_package="/rpc";
+option go_package = "/rpc";
 
 package rpc;
 
