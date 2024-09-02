@@ -23,8 +23,8 @@ func Tracer(serviceName string, samplerConfig *config.SamplerConfig, reporter *c
 			tracer, closer, spanContext, _ := grTracer.CreateTracerHeader(serviceName, ctx.R.Header, samplerConfig, reporter, options...)
 			defer closer.Close()
 
-			// 生成依赖关系，并新建一个 span、
-			// 这里很重要，因为生成了  References []SpanReference 依赖关系
+			// 生成依赖关系，并新建一个 span
+			// 这里很重要，因为生成了 References []SpanReference 依赖关系
 			startSpan := tracer.StartSpan(ctx.R.URL.Path, ext.RPCServerOption(spanContext))
 			defer startSpan.Finish()
 			// 记录 tag

@@ -1239,7 +1239,7 @@ func (s *GrSession) Select(data any, fields ...string) ([]any, error) {
 	if len(fields) > 0 {
 		fieldsStr = strings.Join(fields, ",")
 	}
-	query := fmt.Sprintf("select %s from %s", fieldsStr, s.tableName)
+	query := fmt.Sprintf("select %s from %s ", fieldsStr, s.tableName)
 	var sb strings.Builder
 	sb.WriteString(query)
 	sb.WriteString(s.whereParam.String())
