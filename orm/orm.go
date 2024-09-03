@@ -1397,7 +1397,7 @@ func columnsFromStruct(model any) ([]string, error) {
 // 构建CREATE TABLE语句并创建
 func (db *GrDb) AutoMigrateMySQL(model any) error {
 	t := reflect.TypeOf(model)
-	tableName := Name(t.Elem().Name()) + "s" // 获取表名字
+	tableName := strings.ToLower(Name(t.Elem().Name())) + "s" // 获取表名字
 	columns, err := columnsFromStruct(model)
 	if err != nil {
 		return err
