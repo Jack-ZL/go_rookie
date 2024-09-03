@@ -1394,7 +1394,7 @@ func columnsFromStruct(model any) ([]string, error) {
 }
 
 // 构建CREATE TABLE语句并创建
-func (s *GrSession) AutoMigrateMySQL(model any) error {
+func (db *GrDb) AutoMigrateMySQL(model any) error {
 	t := reflect.TypeOf(model)
 	tableName := Name(t.Elem().Name()) + "s" // 获取表名字
 	columns, err := columnsFromStruct(model)
@@ -1408,7 +1408,7 @@ func (s *GrSession) AutoMigrateMySQL(model any) error {
 	fmt.Println(createTableStmt)
 
 	// 执行建表语句
-	sqlPer, err := s.db.db.Prepare(createTableStmt)
+	sqlPer, err := db.db.Prepare(createTableStmt)
 	if err != nil {
 		return err
 	}
