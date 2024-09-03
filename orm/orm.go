@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	grLog "github.com/Jack-ZL/go_rookie/log"
+	_ "github.com/go-sql-driver/mysql"
 	"reflect"
 	"strings"
 	"time"
