@@ -99,7 +99,7 @@ func (db *GrDb) New(data any) *GrSession {
 
 	tVar := t.Elem()
 	if s.tableName == "" {
-		s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name()))
+		s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name())) + "s"
 	}
 	return s
 }
@@ -1257,7 +1257,6 @@ func (s *GrSession) Select(data any, fields ...string) ([]any, error) {
 
 	result := make([]any, 0)
 	for {
-
 		if rows.Next() {
 			data := reflect.New(t.Elem()).Interface()
 			values := make([]any, len(columns))
@@ -1332,4 +1331,95 @@ func (s *GrSession) Delete() (int64, error) {
 		return 0, err
 	}
 	return exec.RowsAffected()
+}
+
+// 解析结构体字段以获取列定义
+func columnsFromStruct(model any) ([]string, error) {
+	var columns []string
+	t := reflect.TypeOf(model)
+
+	tVar := t.Elem()
+	dbNameNewParts := []string{}
+	dbNameIndexParts := []string{}
+	for i := 0; i < tVar.NumField(); i++ {
+		field := tVar.Field(i)
+		// 列名
+		fieldName := field.Tag.Get("json")
+		if fieldName == "" {
+			continue
+		}
+
+		// 列的约束条件
+		dbName := field.Tag.Get("db")
+		dbNameParts := strings.Split(dbName, ";")
+		if dbName == "" { // 如果没有db标签或db标签为空，就根据结构体定义的类型给默认设置
+			if field.Type.Kind() == reflect.Int ||
+				field.Type.Kind() == reflect.Int64 ||
+				field.Type.Kind() == reflect.Uint ||
+				field.Type.Kind() == reflect.Uint8 ||
+				field.Type.Kind() == reflect.Uint32 ||
+				field.Type.Kind() == reflect.Uint64 ||
+				field.Type.Kind() == reflect.Int32 {
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("%v int", fieldName))
+			} else {
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("%v varchar(100)", fieldName))
+			}
+		} else if len(dbNameParts) > 0 {
+			sqlArr := []string{fieldName}
+			for _, v := range dbNameParts {
+				vSplit := strings.Split(v, ":")
+				if len(vSplit) > 1 {
+					switch vSplit[0] {
+					case "type":
+						sqlArr = append(sqlArr, vSplit[1])
+					case "default":
+						sqlArr = append(sqlArr, fmt.Sprintf("default %v", vSplit[1]))
+					case "index":
+						dbNameIndexParts = append(dbNameIndexParts, fmt.Sprintf("index %v_idx (%v)", fieldName, fieldName))
+					case "unique_index":
+						dbNameIndexParts = append(dbNameIndexParts, fmt.Sprintf("unique %v_idx (%v)", fieldName, fieldName))
+					case "fulltext_index":
+						dbNameIndexParts = append(dbNameIndexParts, fmt.Sprintf("fulltext %v_idx (%v)", fieldName, fieldName))
+					}
+				} else {
+					sqlArr = append(sqlArr, v)
+				}
+			}
+			dbNameNewParts = append(dbNameNewParts, strings.Join(sqlArr, " "))
+		}
+	}
+	columns = append(columns, dbNameNewParts...)
+	columns = append(columns, dbNameIndexParts...)
+	return columns, nil
+}
+
+// 构建CREATE TABLE语句并创建
+func (s *GrSession) AutoMigrateMySQL(model any) error {
+	t := reflect.TypeOf(model)
+	tableName := Name(t.Elem().Name()) // 获取表明
+	columns, err := columnsFromStruct(model)
+	if err != nil {
+		return err
+	}
+
+	// 构建CREATE TABLE语句
+	columnDefs := strings.Join(columns, ", ")
+	createTableStmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s);", tableName, columnDefs)
+	fmt.Println(createTableStmt)
+
+	// 执行建表语句
+	sqlPer, err := s.db.db.Prepare(createTableStmt)
+	if err != nil {
+		return err
+	}
+	exec, err := sqlPer.Exec()
+	if err != nil {
+		return err
+	}
+	_, err = exec.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
