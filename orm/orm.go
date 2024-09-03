@@ -1020,7 +1020,7 @@ func (s *GrSession) fieldNames(data any) {
 	tVar := t.Elem()
 	vVar := v.Elem()
 	if s.tableName == "" {
-		s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name()))
+		s.tableName = s.db.Prefix + strings.ToLower(Name(tVar.Name())) + "s"
 	}
 	for i := 0; i < tVar.NumField(); i++ {
 		fieldName := tVar.Field(i).Name
@@ -1396,7 +1396,7 @@ func columnsFromStruct(model any) ([]string, error) {
 // 构建CREATE TABLE语句并创建
 func (s *GrSession) AutoMigrateMySQL(model any) error {
 	t := reflect.TypeOf(model)
-	tableName := Name(t.Elem().Name()) // 获取表明
+	tableName := Name(t.Elem().Name()) + "s" // 获取表名字
 	columns, err := columnsFromStruct(model)
 	if err != nil {
 		return err
