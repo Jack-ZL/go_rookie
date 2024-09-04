@@ -301,23 +301,24 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 		for i := 0; i < tVar.NumField(); i++ {
 			fieldName := tVar.Field(i).Name
 			tag := tVar.Field(i).Tag
+
+			// 自增主键(直接跳过)
 			sqlTag := tag.Get("grorm")
+			if sqlTag != "" && strings.Contains(sqlTag, "auto_increment") {
+				continue
+			}
+
+			sqlTag = tag.Get("json")
 			if sqlTag == "" {
 				sqlTag = strings.ToLower(Name(fieldName))
-			} else {
-				if strings.Contains(sqlTag, "auto_increment") {
-					// 自增长的主键id
-					continue
-				}
-				if strings.Contains(sqlTag, ",") {
-					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
-				}
 			}
+
 			id := vVar.Field(i).Interface()
-			// 对id做个判断，如果其值小于等于0，数据库可能是自增，跳过此字段
+			// 如果是id且值小于等于0，数据库可能是自增，跳过此字段
 			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
 				continue
 			}
+
 			if s.updateParam.String() != "" {
 				s.updateParam.WriteString(",")
 			}
@@ -931,13 +932,9 @@ func (s *GrSession) QueryRow(sql string, data any, queryValues ...any) error {
 		for i := 0; i < tVar.NumField(); i++ {
 			name := tVar.Field(i).Name
 			tag := tVar.Field(i).Tag
-			sqlTag := tag.Get("grorm")
+			sqlTag := tag.Get("json")
 			if sqlTag == "" {
 				sqlTag = strings.ToLower(Name(name))
-			} else {
-				if strings.Contains(sqlTag, ",") {
-					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
-				}
 			}
 
 			for j, colName := range columns {
@@ -1027,19 +1024,19 @@ func (s *GrSession) fieldNames(data any) {
 		fieldName := tVar.Field(i).Name
 		tag := tVar.Field(i).Tag
 		sqlTag := tag.Get("grorm")
+
+		// 自增主键判断（直接跳过）
+		if sqlTag != "" && strings.Contains(sqlTag, "auto_increment") {
+			continue
+		}
+
+		sqlTag = tag.Get("json")
 		if sqlTag == "" {
 			sqlTag = strings.ToLower(Name(fieldName))
-		} else {
-			if strings.Contains(sqlTag, "auto_increment") {
-				// 自增长的主键id
-				continue
-			}
-			if strings.Contains(sqlTag, ",") {
-				sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
-			}
 		}
+
 		id := vVar.Field(i).Interface()
-		// 对id做个判断，如果其值小于等于0，数据库可能是自增，跳过此字段
+		// 如果是id且值小于等于0，数据库可能是自增，跳过此字段
 		if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
 			continue
 		}
@@ -1071,15 +1068,18 @@ func (s *GrSession) batchValues(data []any) {
 		for i := 0; i < tVar.NumField(); i++ {
 			fieldName := tVar.Field(i).Name
 			tag := tVar.Field(i).Tag
+
 			sqlTag := tag.Get("grorm")
+			// 自增主键就跳过
+			if sqlTag != "" && strings.Contains(sqlTag, "auto_increment") {
+				continue
+			}
+
+			sqlTag = tag.Get("json")
 			if sqlTag == "" {
 				sqlTag = strings.ToLower(Name(fieldName))
-			} else {
-				if strings.Contains(sqlTag, "auto_increment") {
-					// 自增长的主键id
-					continue
-				}
 			}
+
 			id := vVar.Field(i).Interface()
 			// 对id做个判断，如果其值小于等于0，数据库可能是自增，跳过此字段
 			if strings.ToLower(sqlTag) == "id" && IsAutoId(id) {
@@ -1196,13 +1196,9 @@ func (s *GrSession) SelectOne(data any, fields ...string) error {
 		for i := 0; i < tVar.NumField(); i++ {
 			name := tVar.Field(i).Name
 			tag := tVar.Field(i).Tag
-			sqlTag := tag.Get("grorm")
+			sqlTag := tag.Get("json")
 			if sqlTag == "" {
 				sqlTag = strings.ToLower(Name(name))
-			} else {
-				if strings.Contains(sqlTag, ",") {
-					sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
-				}
 			}
 
 			for j, colName := range columns {
@@ -1275,13 +1271,9 @@ func (s *GrSession) Select(data any, fields ...string) ([]any, error) {
 			for i := 0; i < tVar.NumField(); i++ {
 				name := tVar.Field(i).Name
 				tag := tVar.Field(i).Tag
-				sqlTag := tag.Get("grorm")
+				sqlTag := tag.Get("json")
 				if sqlTag == "" {
 					sqlTag = strings.ToLower(Name(name))
-				} else {
-					if strings.Contains(sqlTag, ",") {
-						sqlTag = sqlTag[:strings.Index(sqlTag, ",")]
-					}
 				}
 
 				for j, colName := range columns {
@@ -1352,7 +1344,7 @@ func columnsFromStruct(model any) ([]string, error) {
 
 		// 列的约束条件
 		dbName := field.Tag.Get("grorm")
-		dbNameParts := strings.Split(strings.ToLower(dbName), ",")
+		dbNameParts := strings.Split(strings.ToLower(dbName), ";")
 		if dbName == "" { // 如果没有db标签或db标签为空，就根据结构体定义的类型给默认设置
 			if field.Type.Kind() == reflect.Int ||
 				field.Type.Kind() == reflect.Int64 ||
