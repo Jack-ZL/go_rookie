@@ -71,7 +71,7 @@ func (db *GrDb) SetMaxIdleConns(max int) {
 }
 
 /**
- * Close
+ * Close 关闭连接
  * @Author：Jack-Z
  * @Description:
  * @receiver db*
@@ -361,7 +361,7 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 /**
  * UpdateParam
  * @Author：Jack-Z
- * @Description: 支持"字段， 值"的更新方式
+ * @Description: 支持"字段，值"的更新方式
  * 调用方式：db.New().Table("xxxx").Where("id", 10).UpdateParam("age", 34).Update()
  * @receiver s
  * @param field
@@ -1351,8 +1351,8 @@ func columnsFromStruct(model any) ([]string, error) {
 		}
 
 		// 列的约束条件
-		dbName := field.Tag.Get("db")
-		dbNameParts := strings.Split(strings.ToLower(dbName), ";")
+		dbName := field.Tag.Get("grorm")
+		dbNameParts := strings.Split(strings.ToLower(dbName), ",")
 		if dbName == "" { // 如果没有db标签或db标签为空，就根据结构体定义的类型给默认设置
 			if field.Type.Kind() == reflect.Int ||
 				field.Type.Kind() == reflect.Int64 ||
