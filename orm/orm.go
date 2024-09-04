@@ -1352,7 +1352,7 @@ func columnsFromStruct(model any) ([]string, error) {
 
 		// 列的约束条件
 		dbName := field.Tag.Get("db")
-		dbNameParts := strings.Split(dbName, ";")
+		dbNameParts := strings.Split(strings.ToLower(dbName), ";")
 		if dbName == "" { // 如果没有db标签或db标签为空，就根据结构体定义的类型给默认设置
 			if field.Type.Kind() == reflect.Int ||
 				field.Type.Kind() == reflect.Int64 ||
@@ -1361,12 +1361,18 @@ func columnsFromStruct(model any) ([]string, error) {
 				field.Type.Kind() == reflect.Uint32 ||
 				field.Type.Kind() == reflect.Uint64 ||
 				field.Type.Kind() == reflect.Int32 {
-				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("%v int", fieldName))
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("`%v` int not null default 0", fieldName))
+			} else if field.Type.Kind() == reflect.Bool {
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("`%v` tinyint(1) not null default 0", fieldName))
+			} else if field.Type.Kind() == reflect.Float64 || field.Type.Kind() == reflect.Float32 {
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("`%v` decimal(6,2) not null default 0", fieldName))
+			} else if field.Type == reflect.TypeOf(time.Time{}) {
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("`%v` datetime not null default '0000-00-00 00:00:00'", fieldName))
 			} else {
-				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("%v varchar(100)", fieldName))
+				dbNameNewParts = append(dbNameNewParts, fmt.Sprintf("`%v` varchar(100) not null default ''", fieldName))
 			}
 		} else if len(dbNameParts) > 0 {
-			sqlArr := []string{fieldName}
+			sqlArr := []string{fmt.Sprintf("`%v`", fieldName)}
 			for _, v := range dbNameParts {
 				vSplit := strings.Split(v, ":")
 				if len(vSplit) > 1 {
