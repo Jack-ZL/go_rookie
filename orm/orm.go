@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/Jack-ZL/go_rookie/config"
 	grLog "github.com/Jack-ZL/go_rookie/log"
 	_ "github.com/go-sql-driver/mysql"
 	"reflect"
@@ -1403,20 +1404,23 @@ func (db *GrDb) AutoMigrateMySQL(model any) error {
 
 	// 构建CREATE TABLE语句
 	columnDefs := strings.Join(columns, ", ")
-	createTableStmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (%s);", tableName, columnDefs)
-	fmt.Println(createTableStmt)
+	createTableStmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.`%s` (%s);", config.Conf.Mysql["db_database"], tableName, columnDefs)
+	db.logger.Info(createTableStmt)
 
 	// 执行建表语句
 	sqlPer, err := db.db.Prepare(createTableStmt)
 	if err != nil {
+		db.logger.Error(err)
 		return err
 	}
 	exec, err := sqlPer.Exec()
 	if err != nil {
+		db.logger.Error(err)
 		return err
 	}
 	_, err = exec.RowsAffected()
 	if err != nil {
+		db.logger.Error(err)
 		return err
 	}
 
