@@ -201,9 +201,9 @@ func (s *GrSession) InsertBatch(data []any) (int64, int64, error) {
 	var err error
 	var sp *sql.Stmt
 	if s.beginTx {
-		sp, err = s.tx.Prepare(query)
+		sp, err = s.tx.Prepare(sb.String())
 	} else {
-		sp, err = s.db.db.Prepare(query)
+		sp, err = s.db.db.Prepare(sb.String())
 	}
 
 	if err != nil {
@@ -251,9 +251,9 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 		var err error
 		var sp *sql.Stmt
 		if s.beginTx {
-			sp, err = s.tx.Prepare(query)
+			sp, err = s.tx.Prepare(sb.String())
 		} else {
-			sp, err = s.db.db.Prepare(query)
+			sp, err = s.db.db.Prepare(sb.String())
 		}
 
 		if err != nil {
@@ -284,7 +284,7 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 			s.updateParam.WriteString(",")
 		}
 		s.updateParam.WriteString(data[0].(string))
-		s.updateParam.WriteString("= ?")
+		s.updateParam.WriteString(" = ?")
 		s.values = append(s.values, data[1])
 	} else {
 		updateData := data[0]
@@ -335,9 +335,9 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 	var err error
 	var sp *sql.Stmt
 	if s.beginTx {
-		sp, err = s.tx.Prepare(query)
+		sp, err = s.tx.Prepare(sb.String())
 	} else {
-		sp, err = s.db.db.Prepare(query)
+		sp, err = s.db.db.Prepare(sb.String())
 	}
 	if err != nil {
 		return -1, -1, err
@@ -356,7 +356,7 @@ func (s *GrSession) Update(data ...any) (int64, int64, error) {
 	if err != nil {
 		return -1, -1, err
 	}
-	return last_id, affected, err
+	return last_id, affected, nil
 }
 
 /**
@@ -1312,9 +1312,9 @@ func (s *GrSession) Delete() (int64, error) {
 	var err error
 	var prepare *sql.Stmt
 	if s.beginTx {
-		prepare, err = s.tx.Prepare(query)
+		prepare, err = s.tx.Prepare(sb.String())
 	} else {
-		prepare, err = s.db.db.Prepare(query)
+		prepare, err = s.db.db.Prepare(sb.String())
 	}
 	if err != nil {
 		return 0, err

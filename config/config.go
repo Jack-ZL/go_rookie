@@ -23,9 +23,11 @@ type GrConfig struct {
 	Mysql     map[string]any //mysql数据库配置
 	Sqlserver map[string]any //sqlserver数据库配置
 	Redis     map[string]any //redis配置
+	Es        map[string]any //es配置
 	Mongodb   map[string]any //Mongodb配置
 	App       map[string]any //应用基本配置
 	Url       map[string]any //链接类配置
+	Thirdconf map[string]any //其他第三方的配置
 }
 
 /**
