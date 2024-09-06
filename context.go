@@ -2,6 +2,7 @@ package go_rookie
 
 import (
 	"errors"
+	"fmt"
 	"github.com/Jack-ZL/go_rookie/binding"
 	grLog "github.com/Jack-ZL/go_rookie/log"
 	"github.com/Jack-ZL/go_rookie/render"
@@ -666,4 +667,17 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
  */
 func (c *Context) GetHeader(key string) string {
 	return c.R.Header.Get(key)
+}
+
+/**
+ *获取url参数
+ *处理query参数，比如：http://xxx.com/user/add?id=1&age=20&username=张三
+ *批量获取到id、age、username放到map里
+ */
+func (c *Context) Query() url.Values {
+	c.initQueryCache()
+	for k, v := range c.queryCache {
+		fmt.Println(k, v)
+	}
+	return c.queryCache
 }
