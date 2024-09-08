@@ -2,7 +2,6 @@ package go_rookie
 
 import (
 	"errors"
-	"fmt"
 	"github.com/Jack-ZL/go_rookie/binding"
 	grLog "github.com/Jack-ZL/go_rookie/log"
 	"github.com/Jack-ZL/go_rookie/render"
@@ -676,8 +675,5 @@ func (c *Context) GetHeader(key string) string {
  */
 func (c *Context) Query() url.Values {
 	c.initQueryCache()
-	for k, v := range c.queryCache {
-		fmt.Println(k, v)
-	}
 	return c.queryCache
 }
