@@ -17,6 +17,7 @@ type HTMLRender struct {
 	Template *template.Template
 }
 
+// NewHTML creates a new HTML render instance with the provided template and data.
 func (h *HTML) Render(w http.ResponseWriter, code int) error {
 	h.WriteContentType(w)
 	w.WriteHeader(code)

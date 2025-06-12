@@ -23,9 +23,9 @@ import (
  */
 func CreateTracer(serviceName string, samplerConfig *config.SamplerConfig, reporter *config.ReporterConfig, options ...config.Option) (opentracing.Tracer, io.Closer, error) {
 	var cfg = config.Configuration{
-		ServiceName: serviceName,
-		Sampler:     samplerConfig, //采样器配置
-		Reporter:    reporter,      //配置客户端如何上报追踪信息
+		ServiceName: serviceName,   // 服务名称
+		Sampler:     samplerConfig, // 采样器配置
+		Reporter:    reporter,      // 配置客户端如何上报追踪信息
 	}
 	tracer, closer, err := cfg.NewTracer(options...)
 	return tracer, closer, err
@@ -34,7 +34,7 @@ func CreateTracer(serviceName string, samplerConfig *config.SamplerConfig, repor
 /**
  * CreateTracerHeader
  * @Author：Jack-Z
- * @Description: 带有上下文解析的追踪器
+ * @Description: 创建带有上下文解析的追踪器
  * @param serviceName
  * @param header
  * @param samplerConfig
@@ -53,8 +53,7 @@ func CreateTracerHeader(serviceName string, header http.Header, samplerConfig *c
 	}
 	tracer, closer, err := cfg.NewTracer(options...)
 	// 继承别的进程传递过来的上下文
-	spanContext, _ := tracer.Extract(opentracing.HTTPHeaders,
-		opentracing.HTTPHeadersCarrier(header))
+	spanContext, err := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(header))
 
 	return tracer, closer, spanContext, err
 }

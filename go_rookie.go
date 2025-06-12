@@ -35,6 +35,7 @@ type routerGroup struct {
 	middlewares        []MiddlewareFunc // 请求处理前的中间件
 }
 
+// 路由分组-引用中间件
 func (r *routerGroup) Use(middlewareFunc ...MiddlewareFunc) {
 	r.middlewares = append(r.middlewares, middlewareFunc...)
 }
@@ -149,19 +150,19 @@ type ErrorHandler func(err error) (int, any)
 
 type Engine struct {
 	router
-	funcMap          template.FuncMap
-	HTMLRender       render.HTMLRender
+	funcMap          template.FuncMap  // 模版函数映射
+	HTMLRender       render.HTMLRender // HTML渲染器，提前加在模版
 	pool             sync.Pool
-	Logger           *grLog.Logger
+	Logger           *grLog.Logger // 日志记录器
 	middles          []MiddlewareFunc
 	errorHandler     ErrorHandler
 	OpenGateway      bool
 	gatewayConfigs   []gateway.GWConfig
 	gatewayTreeNode  *gateway.TreeNode
 	gatewayConfigMap map[string]gateway.GWConfig
-	RegisterType     string              //注册类型
-	RegisterOption   register.Option     //注册的配置项
-	RegisterCli      register.GrRegister //注册的客户端
+	RegisterType     string              // 注册类型
+	RegisterOption   register.Option     // 注册的配置项
+	RegisterCli      register.GrRegister // 注册的客户端
 }
 
 /**
@@ -201,6 +202,7 @@ func (e *Engine) allocateContext() any {
 	return &Context{engine: e}
 }
 
+// 设置网关配置
 func (e *Engine) SetGatewayConfig(configs []gateway.GWConfig) {
 	e.gatewayConfigs = configs
 	// 把这个路径存储起来，访问的时候去匹配里面的路由，匹配到就获取相应的结果
@@ -299,8 +301,8 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 			fmt.Fprintln(ctx.W, err.Error())
 			return
 		}
-		
-		//网关处理逻辑
+
+		// 网关处理逻辑
 		director := func(req *http.Request) {
 			req.Host = target.Host
 			req.URL.Host = target.Host
@@ -310,11 +312,11 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 				req.Header.Set("User-Agent", "")
 			}
 		}
-		//TODO:相应处理
+		// TODO:相应处理
 		response := func(response *http.Response) error {
 			return nil
 		}
-		//TODO:错误处理
+		// TODO:错误处理
 		handler := func(writer http.ResponseWriter, request *http.Request, err error) {
 			log.Println(err)
 			log.Println("错误处理")
@@ -327,7 +329,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 		proxy.ServeHTTP(w, r)
 		return
 	}
-	
+
 	method := r.Method
 	for _, group := range e.routerGroup {
 		routerName := SubStringLast(r.URL.Path, "/"+group.name)
@@ -339,7 +341,7 @@ func (e *Engine) httpRequestHandler(ctx *Context, w http.ResponseWriter, r *http
 				group.methodHandler(node.routerName, ANY, handle, ctx)
 				return
 			}
-			
+
 			handle, ok = group.handlerFuncMap[node.routerName][method]
 			if ok {
 				group.methodHandler(node.routerName, method, handle, ctx)
@@ -377,7 +379,7 @@ func (e *Engine) Run(addr string) {
 		}
 		e.RegisterCli = &r
 	}
-	
+
 	http.Handle("/", e)
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {

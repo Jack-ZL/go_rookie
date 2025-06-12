@@ -19,17 +19,17 @@ import (
 const defaultMultipartMemory = 32 << 20 // 默认是分配32M的内存
 
 type Context struct {
-	W                     http.ResponseWriter
-	R                     *http.Request
+	W                     http.ResponseWriter // 响应写入器
+	R                     *http.Request       // 请求对象
 	engine                *Engine
-	queryCache            url.Values
-	formCache             url.Values
+	queryCache            url.Values // query参数缓存
+	formCache             url.Values // form表单参数缓存
 	DisallowUnknownFields bool
 	IsValidate            bool
-	StatusCode            int
+	StatusCode            int // 响应状态码
 	Logger                *grLog.Logger
 	Keys                  map[string]any
-	mu                    sync.RWMutex
+	mu                    sync.RWMutex  // 读写锁
 	sameSite              http.SameSite // 降低跨域信息泄露的风险，并为跨站点请求伪造攻击提供一些保护
 }
 
@@ -54,6 +54,7 @@ func (c *Context) Get(key string) (any, bool) {
 	return value, ok
 }
 
+// BasicAuth 生成基本认证的字符串
 func (c *Context) SetBasicAuth(username, password string) {
 	c.R.Header.Set("Authorization", "GOROOKIE"+BasicAuth(username, password))
 }
@@ -618,6 +619,7 @@ func (c *Context) Fail(code int, msg string) {
 	c.String(code, msg)
 }
 
+// HandlerWithError 错误信息统一封装，前端使用code的值做判断处理
 func (c *Context) HandlerWithError(statusCode int, obj any, err error) {
 	if err != nil {
 		code, data := c.engine.errorHandler(err)

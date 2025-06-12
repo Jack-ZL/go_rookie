@@ -1,5 +1,8 @@
 package go_rookie
 
+// Package go_rookie provides a recovery middleware for handling panics in HTTP handlers.
+// It captures the panic, logs the error details including file and line number,
+// and returns a 500 Internal Server Error response to the client.
 import (
 	"errors"
 	"fmt"

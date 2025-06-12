@@ -7,6 +7,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/vo"
 )
 
+// nacos-用于服务注册和发现（和etcd功能类似）
 type GrNacosRegister struct {
 	cli naming_client.INamingClient
 }
@@ -20,18 +21,7 @@ type GrNacosRegister struct {
  * @return error
  */
 func (r *GrNacosRegister) CreateCli(option Option) error {
-	// 创建clientConfig的另一种方式
-	// clientConfig := *constant.NewClientConfig(
-	//	constant.WithNamespaceId(""), //当namespace是public时，此处填空字符串。
-	//	constant.WithTimeoutMs(5000),
-	//	constant.WithNotLoadCacheAtStart(true),
-	//	constant.WithLogDir("/tmp/nacos/log"),
-	//	constant.WithCacheDir("/tmp/nacos/cache"),
-	//	constant.WithLogLevel("debug"),
-	// )
-
 	// 创建服务发现客户端
-	// 创建服务发现客户端的另一种方式 (推荐)
 	namingClient, err := clients.NewNamingClient(
 		vo.NacosClientParam{
 			ClientConfig:  option.NacosClientConfig,

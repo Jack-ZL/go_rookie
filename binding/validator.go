@@ -113,6 +113,8 @@ func (d *defaultValidator) ValidateStruct(data any) error {
 			return nil
 		}
 		return sliceValidationError
+	default:
+		panic("unhandled default case")
 	}
 	return nil
 }

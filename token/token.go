@@ -156,7 +156,7 @@ func (j *JwtHandler) refreshToken(token *jwt.Token) (string, error) {
 /**
  * LogoutHandler
  * @Author：Jack-Z
- * @Description: 推出登录
+ * @Description: 退出登录
  * @receiver j
  * @param ctx
  * @return error
@@ -281,7 +281,6 @@ func (j *JwtHandler) AuthInterceptor(next go_rookie.HandlerFunc) go_rookie.Handl
 
 		if token == "" {
 			j.AuthErrorHandler(ctx, errors.New("token is null or empty"))
-
 			return
 		}
 
@@ -304,6 +303,7 @@ func (j *JwtHandler) AuthInterceptor(next go_rookie.HandlerFunc) go_rookie.Handl
 	}
 }
 
+// AuthErrorHandler authentication error handler
 func (j *JwtHandler) AuthErrorHandler(ctx *go_rookie.Context, err error) {
 	if j.AuthHandler == nil {
 		ctx.W.WriteHeader(http.StatusUnauthorized)

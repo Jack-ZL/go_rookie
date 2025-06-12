@@ -8,6 +8,6 @@ type GWConfig struct {
 	Path        string                  // 路径
 	Host        string                  // ip地址
 	Port        int                     // 端口
-	Header      func(req *http.Request) //请求的header
-	ServiceName string                  //服务名称
+	Header      func(req *http.Request) // 请求的header
+	ServiceName string                  // 服务名称
 }
