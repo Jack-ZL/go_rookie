@@ -271,6 +271,7 @@ type GrHttpClientSession struct {
 	ReqHandler func(req *http.Request)
 }
 
+// Session 会话
 func (c *GrHttpClient) Session() *GrHttpClientSession {
 	return &GrHttpClientSession{
 		c, nil,
@@ -357,9 +358,10 @@ func (h HttpConfig) Prefix() string {
 	switch h.Protocol {
 	case HTTP:
 		return fmt.Sprintf("http://%s:%d", h.Host, h.Port)
-
 	case HTTPS:
 		return fmt.Sprintf("https://%s:%d", h.Host, h.Port)
+	default:
+		panic(errors.New("protocol not support"))
 	}
 	return ""
 }

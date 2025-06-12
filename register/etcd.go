@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// etcd-用于服务注册和发现
 type GrEtcdRegister struct {
 	cli *clientv3.Client
 }

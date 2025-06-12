@@ -5,19 +5,20 @@ import (
 	"time"
 )
 
+// 服务注册和发现支持两个实现：etcd和nacos
 type Option struct {
-	Endpoints         []string      // 节点
-	DialTimeout       time.Duration // 超时时间
-	ServiceName       string        // 服务名称
-	Host              string        // 域名
-	Port              int           // 端口号
-	NacosServerConfig []constant.ServerConfig
-	NacosClientConfig *constant.ClientConfig
+	Endpoints         []string                // 节点
+	DialTimeout       time.Duration           // 超时时间
+	ServiceName       string                  // 服务名称
+	Host              string                  // 域名
+	Port              int                     // 端口号
+	NacosServerConfig []constant.ServerConfig // nacos服务端配置
+	NacosClientConfig *constant.ClientConfig  // nacos客户端配置
 }
 
 type GrRegister interface {
-	CreateCli(option Option) error                                   //创建客户端
-	RegisterService(serviceName string, host string, port int) error //通过名称注册服务
-	GetValue(serviceName string) (string, error)                     //通过服务名称获取一个实例
-	Close() error                                                    //关闭客户端
+	CreateCli(option Option) error                                   // 创建客户端
+	RegisterService(serviceName string, host string, port int) error // 通过名称注册服务
+	GetValue(serviceName string) (string, error)                     // 通过服务名称获取一个实例
+	Close() error                                                    // 关闭客户端
 }

@@ -62,8 +62,8 @@ type Fields map[string]any
 
 // Logger 日志
 type Logger struct {
-	Formatter    LoggingFormatter // 格式化
-	Level        LoggerLevel      // 级别
+	Formatter    LoggingFormatter // 日志格式化
+	Level        LoggerLevel      // 日志级别
 	Outs         []*LoggerWriter  // 输出
 	LoggerFields Fields           // 额外的信息
 	logPath      string           // 日志文件存放目录
@@ -89,8 +89,8 @@ type LoggingFormatParam struct {
 }
 
 type LoggerFormatter struct {
-	Level        LoggerLevel
-	IsColor      bool
+	Level        LoggerLevel // 日志级别
+	IsColor      bool        // 是否显示颜色
 	LoggerFields Fields
 }
 

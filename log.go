@@ -66,6 +66,7 @@ func (p *LogFormatterParams) ResetColor() string {
 	return reset
 }
 
+// defaultFormatter 默认的日志格式化函数
 var defaultFormatter = func(params *LogFormatterParams) string {
 	var statusCodeColor = params.StatusCodeColor()
 	var resetColor = params.ResetColor() // 结束符颜色
@@ -106,6 +107,7 @@ var defaultFormatter = func(params *LogFormatterParams) string {
 
 }
 
+// LoggingWithConfig 日志中间件配置函数
 func LoggingWithConfig(conf LoggingConfig, next HandlerFunc) HandlerFunc {
 	formatter := conf.Formatter
 	if formatter == nil {

@@ -8,21 +8,21 @@ import (
 
 // 熔断服务
 
-type State int //状态标识
+type State int // 状态标识
 
 const (
-	StateClosed   State = iota //关闭
-	StateHalfOpen              //半开启
-	StateOpen                  //开启
+	StateClosed   State = iota // 关闭
+	StateHalfOpen              // 半开启
+	StateOpen                  // 开启
 )
 
 // 计数
 type Counts struct {
-	Requests             uint32 //请求数量
-	TotalSuccesses       uint32 //总成功数
-	TotalFailures        uint32 //总失败数
-	ConsecutiveSuccesses uint32 //连续成功数量
-	ConsecutiveFailures  uint32 //连续失败数量
+	Requests             uint32 // 请求数量
+	TotalSuccesses       uint32 // 总成功数
+	TotalFailures        uint32 // 总失败数
+	ConsecutiveSuccesses uint32 // 连续成功数量
+	ConsecutiveFailures  uint32 // 连续失败数量
 }
 
 func (c *Counts) OnRequest() {
@@ -54,32 +54,32 @@ func (c *Counts) Clear() {
  *  @Description: 断路器各项设置
  */
 type Settings struct {
-	Name          string                                  //名字
-	MaxRequests   uint32                                  //最大请求数
-	Interval      time.Duration                           //间隔时间
-	Timeout       time.Duration                           //超时时间
-	ReadyToTrip   func(counts Counts) bool                //执行熔断
-	OnStateChange func(name string, from State, to State) //状态变更
-	IsSuccessful  func(err error) bool                    //是否成功
-	Fallback      func(err error) (any, error)            //降级处理方法
+	Name          string                                  // 名字
+	MaxRequests   uint32                                  // 最大请求数
+	Interval      time.Duration                           // 间隔时间
+	Timeout       time.Duration                           // 超时时间
+	ReadyToTrip   func(counts Counts) bool                // 执行熔断
+	OnStateChange func(name string, from State, to State) // 状态变更
+	IsSuccessful  func(err error) bool                    // 是否成功
+	Fallback      func(err error) (any, error)            // 降级处理方法
 }
 
 // CircuitBreaker 断路器
 type CircuitBreaker struct {
-	name          string                                  //名字
-	maxRequests   uint32                                  //最大请求数：当连续请求成功数大于此时 断路器关闭
-	interval      time.Duration                           //间隔时间
-	timeout       time.Duration                           //超时时间
-	readyToTrip   func(counts Counts) bool                //是否执行熔断
-	isSuccessful  func(err error) bool                    //是否成功
-	onStateChange func(name string, from State, to State) //状态变更
+	name          string                                  // 名字
+	maxRequests   uint32                                  // 最大请求数：当连续请求成功数大于此时 断路器关闭
+	interval      time.Duration                           // 间隔时间
+	timeout       time.Duration                           // 超时时间
+	readyToTrip   func(counts Counts) bool                // 是否执行熔断
+	isSuccessful  func(err error) bool                    // 是否成功
+	onStateChange func(name string, from State, to State) // 状态变更
 
 	mutex      sync.Mutex
-	state      State                        //状态
-	generation uint64                       //新的一代：状态变更，new一个
-	counts     Counts                       //数量
-	expiry     time.Time                    //到期时间 检查是否从开到半开
-	fallback   func(err error) (any, error) //降级处理方法
+	state      State                        // 状态
+	generation uint64                       // 新的一代：状态变更，new一个
+	counts     Counts                       // 数量
+	expiry     time.Time                    // 到期时间 检查是否从开到半开
+	fallback   func(err error) (any, error) // 降级处理方法
 }
 
 func (cb *CircuitBreaker) NewGeneration() {
@@ -147,6 +147,7 @@ func NewCircuitBreaker(st Settings) *CircuitBreaker {
 	return cb
 }
 
+// Execute 执行请求
 func (cb *CircuitBreaker) Execute(req func() (any, error)) (any, error) {
 	// 判读是否执行断路器
 	err, generation := cb.beforeRequest()
@@ -157,7 +158,7 @@ func (cb *CircuitBreaker) Execute(req func() (any, error)) (any, error) {
 		}
 		return nil, err
 	}
-	result, err := req() //发起一个请求
+	result, err := req() // 发起一个请求
 	cb.counts.OnRequest()
 
 	// 请求之后判断：当前状态是否需要更新
@@ -165,6 +166,7 @@ func (cb *CircuitBreaker) Execute(req func() (any, error)) (any, error) {
 	return result, err
 }
 
+// beforeRequest 在请求之前执行
 func (cb *CircuitBreaker) beforeRequest() (error, uint64) {
 	// 判断当前状态：如果断路器是打开状态，直接返回err
 	now := time.Now()
@@ -182,6 +184,7 @@ func (cb *CircuitBreaker) beforeRequest() (error, uint64) {
 	return nil, generation
 }
 
+// afterRequest 在请求之后执行
 func (cb *CircuitBreaker) afterRequest(beforeGeneration uint64, isSuccessful bool) {
 	now := time.Now()
 	state, generation := cb.currentState(now)
@@ -213,6 +216,8 @@ func (cb *CircuitBreaker) currentState(now time.Time) (State, uint64) {
 		if cb.expiry.Before(now) {
 			cb.SetState(StateHalfOpen)
 		}
+	default:
+		panic("unhandled default case")
 	}
 	return cb.state, cb.generation
 }

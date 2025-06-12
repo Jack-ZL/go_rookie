@@ -2,12 +2,14 @@ package gateway
 
 import "strings"
 
+// TreeNode represents a node in the routing tree structure.
+// 网管路由树节点
 type TreeNode struct {
 	Name       string
-	Children   []*TreeNode
-	RouterName string
-	IsEnd      bool // 是否是尾节点标识
-	GwName     string
+	Children   []*TreeNode // 子节点
+	RouterName string      // 路由名称
+	IsEnd      bool        // 是否是尾节点标识
+	GwName     string      // 网关名称
 }
 
 func (t *TreeNode) Put(path string, gwName string) {

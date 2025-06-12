@@ -2,11 +2,15 @@ package go_rookie
 
 import "strings"
 
+/**
+ * TreeNode 前缀树，解决路径匹配，比如/user/get/:id 动态路由，静态文件路由/static/vue.js或者/static/css/index.css
+ */
+
 type treeNode struct {
 	name       string
-	children   []*treeNode
-	routerName string
-	isEnd      bool // 是否是尾节点标识
+	children   []*treeNode // 子节点
+	routerName string      // 路由名称
+	isEnd      bool        // 是否是尾节点标识
 }
 
 func (t *treeNode) Put(path string) {

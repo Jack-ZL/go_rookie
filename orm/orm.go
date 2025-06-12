@@ -20,15 +20,15 @@ type GrDb struct {
 
 type GrSession struct {
 	db          *GrDb
-	tx          *sql.Tx
-	beginTx     bool
-	tableName   string
-	fieldName   []string
-	placeHolder []string
-	values      []any
-	whereValues []any
-	updateParam strings.Builder
-	whereParam  strings.Builder
+	tx          *sql.Tx         // 事务
+	beginTx     bool            // 事务是否开启
+	tableName   string          // 表名
+	fieldName   []string        // 字段名
+	placeHolder []string        // 占位符
+	values      []any           // 插入或更新的值
+	whereValues []any           // where条件的值
+	updateParam strings.Builder // 更新参数
+	whereParam  strings.Builder // where条件参数
 }
 
 /**
@@ -1327,7 +1327,7 @@ func (s *GrSession) Delete() (int64, error) {
 	return exec.RowsAffected()
 }
 
-// 解析结构体字段以获取列定义
+// 解析表结构体字段以获取列定义
 func columnsFromStruct(model any) ([]string, error) {
 	var columns []string
 	t := reflect.TypeOf(model)

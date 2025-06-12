@@ -10,8 +10,8 @@ import (
  * SubStringLast
  * @Author：Jack-Z
  * @Description: 字符串截取
- * @param str
- * @param substr
+ * @param str  给定的字符串
+ * @param substr   子串
  * @return string
  */
 func SubStringLast(str string, substr string) string {
@@ -25,8 +25,8 @@ func SubStringLast(str string, substr string) string {
 /**
  * isASCII
  * @Author：Jack-Z
- * @Description: 判断是否为ASCII字符
- * @param s
+ * @Description: 该方法用于判断传入的字符串s是否全部由ASCII字符组成。如果字符串中有任意一个字符的ASCII码值大于unicode.MaxASCII（即127），则返回false，否则返回true
+ * @param s 字符串
  * @return bool
  */
 func isASCII(s string) bool {
@@ -42,7 +42,7 @@ func isASCII(s string) bool {
  * StringToBytes
  * @Author：Jack-Z
  * @Description:字符串转byte切片
- * @param s
+ * @param s 字符串
  * @return []byte
  */
 func StringToBytes(s string) []byte {

@@ -62,6 +62,7 @@ func NewPoolConf() (*Pool, error) {
 	return NewTimePool(int(pcap.(int64)), DefaultExpire)
 }
 
+// NewTimePool creates a new worker pool with a specified capacity and expiration time for idle workers.
 func NewTimePool(c int, expire int) (*Pool, error) {
 	if c <= 0 {
 		return nil, ErrorInvalidCap
@@ -239,6 +240,7 @@ func (p *Pool) incRunning() {
 	atomic.AddInt32(&p.running, 1)
 }
 
+// 放一个worker到pool池中
 func (p *Pool) PutWorker(w *Worker) {
 	w.lastTime = time.Now()
 	p.lock.Lock()
@@ -306,10 +308,12 @@ func (p *Pool) Restart() bool {
 	return true
 }
 
+// Running returns the number of currently running workers in the pool.
 func (p *Pool) Running() int {
 	return int(atomic.LoadInt32(&p.running))
 }
 
+// Free returns the number of free workers in the pool.
 func (p *Pool) Free() int {
 	return int(p.cap - p.running)
 }

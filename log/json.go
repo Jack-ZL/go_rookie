@@ -13,7 +13,7 @@ type JsonFormatter struct {
 /**
  * Format
  * @Author：Jack-Z
- * @Description: json格式化
+ * @Description: 日志json格式化
  * @receiver f
  * @param param
  * @return string
