@@ -9,16 +9,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Jack-ZL/go_rookie/register"
-	"golang.org/x/time/rate"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 	"io"
 	"log"
 	"net"
 	"reflect"
 	"sync/atomic"
 	"time"
+
+	"github.com/Jack-ZL/go_rookie/register"
+	"golang.org/x/time/rate"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 /**
@@ -233,7 +234,7 @@ type GrTcpServer struct {
 	port           int
 	listen         net.Listener
 	serviceMap     map[string]any
-	RegisterType   string //注册类型：nacos或etcd
+	RegisterType   string // 注册类型：nacos或etcd
 	RegisterOption register.Option
 	RegisterCli    register.GrRegister
 	LimiterTimeOut time.Duration // 限流超时时间
@@ -861,7 +862,10 @@ func (c *GrTcpClient) readHandle(rspChan chan *GrRpcResponse) {
 				asInterface := rsp.Data.AsInterface()
 				marshal, _ := json.Marshal(asInterface)
 				rsp1 := &GrRpcResponse{}
-				json.Unmarshal(marshal, rsp1)
+				err := json.Unmarshal(marshal, rsp1)
+				if err != nil {
+					return
+				}
 				rspChan <- rsp1
 			} else {
 				rsp := msg.Data.(*GrRpcResponse)

@@ -16,7 +16,7 @@ const (
 	StateOpen                  // 开启
 )
 
-// 计数
+// Counts 计数
 type Counts struct {
 	Requests             uint32 // 请求数量
 	TotalSuccesses       uint32 // 总成功数
@@ -154,7 +154,10 @@ func (cb *CircuitBreaker) Execute(req func() (any, error)) (any, error) {
 	if err != nil {
 		// 发生错误时，执行降级方法
 		if cb.fallback != nil {
-			cb.fallback(err)
+			_, err := cb.fallback(err)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return nil, err
 	}
@@ -253,6 +256,8 @@ func (cb *CircuitBreaker) OnSuccess(state State) {
 		if cb.counts.ConsecutiveSuccesses > cb.maxRequests {
 			cb.SetState(StateClosed)
 		}
+	default:
+		panic("OnSuccess unhandled default case")
 	}
 }
 
@@ -268,5 +273,7 @@ func (cb *CircuitBreaker) OnFail(state State) {
 		if cb.readyToTrip(cb.counts) {
 			cb.SetState(StateOpen)
 		}
+	default:
+		panic("OnFail unhandled default case")
 	}
 }

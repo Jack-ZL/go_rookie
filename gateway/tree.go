@@ -12,6 +12,11 @@ type TreeNode struct {
 	GwName     string      // 网关名称
 }
 
+/**
+ * Put
+ * @Author：Jack-Z
+ * @Description: 根据路径插入路由节点
+ */
 func (t *TreeNode) Put(path string, gwName string) {
 	root := t
 	strs := strings.Split(path, "/")
@@ -47,6 +52,11 @@ func (t *TreeNode) Put(path string, gwName string) {
 	t = root
 }
 
+/**
+ * Get
+ * @Author：Jack-Z
+ * @Description: 根据路径获取路由节点
+ */
 func (t *TreeNode) Get(path string) *TreeNode {
 	strs := strings.Split(path, "/")
 	routerName := ""

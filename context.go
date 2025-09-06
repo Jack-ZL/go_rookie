@@ -2,9 +2,6 @@ package go_rookie
 
 import (
 	"errors"
-	"github.com/Jack-ZL/go_rookie/binding"
-	grLog "github.com/Jack-ZL/go_rookie/log"
-	"github.com/Jack-ZL/go_rookie/render"
 	"html/template"
 	"io"
 	"log"
@@ -14,6 +11,10 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/Jack-ZL/go_rookie/binding"
+	grLog "github.com/Jack-ZL/go_rookie/log"
+	"github.com/Jack-ZL/go_rookie/render"
 )
 
 const defaultMultipartMemory = 32 << 20 // 默认是分配32M的内存
@@ -616,17 +617,28 @@ func (c *Context) BindXML(obj any) error {
 }
 
 func (c *Context) Fail(code int, msg string) {
-	c.String(code, msg)
+	err := c.String(code, msg)
+	if err != nil {
+		c.Logger.Error(err)
+		return
+	}
 }
 
 // HandlerWithError 错误信息统一封装，前端使用code的值做判断处理
 func (c *Context) HandlerWithError(statusCode int, obj any, err error) {
 	if err != nil {
 		code, data := c.engine.errorHandler(err)
-		c.JSON(code, data)
+		err := c.JSON(code, data)
+		if err != nil {
+			c.Logger.Error(err)
+		}
 		return
 	}
-	c.JSON(statusCode, obj)
+	err = c.JSON(statusCode, obj)
+	if err != nil {
+		c.Logger.Error(err)
+		return
+	}
 }
 
 /**

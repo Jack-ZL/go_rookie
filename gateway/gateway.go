@@ -2,7 +2,7 @@ package gateway
 
 import "net/http"
 
-// 网关配置
+// GWConfig 网关配置
 type GWConfig struct {
 	Name        string                  // 网管名称
 	Path        string                  // 路径

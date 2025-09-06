@@ -2,9 +2,10 @@ package go_rookie
 
 import (
 	"context"
-	"golang.org/x/time/rate"
 	"net/http"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 /**
@@ -24,7 +25,11 @@ func Limiter(limit, cap int) MiddlewareFunc {
 
 			err := li.WaitN(con, 1) // 等待令牌，如果在上下文超时之前获取到令牌，则继续执行，否则返回错误
 			if err != nil {
-				ctx.String(http.StatusForbidden, "限流了")
+				err := ctx.String(http.StatusForbidden, "限流了")
+				if err != nil {
+					ctx.Logger.Error(err)
+					return
+				}
 				return
 			}
 			next(ctx)
